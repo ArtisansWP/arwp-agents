@@ -300,7 +300,8 @@ class ARWP_CPT {
 				}
 				foreach ( $values as $value ) {
 					$unserialized = maybe_unserialize( $value );
-					add_post_meta( $new_post_id, $key, $unserialized );
+					// add_post_meta() removes slashes. Put them back so \d in a pattern survives.
+					add_post_meta( $new_post_id, $key, wp_slash( $unserialized ) );
 				}
 			}
 
@@ -749,7 +750,7 @@ JS;
 				<th><label for="arwp_blocked_patterns"><?php esc_html_e( 'Blocked patterns', 'arwp-agents' ); ?></label></th>
 				<td>
 					<textarea name="arwp_blocked_patterns" id="arwp_blocked_patterns" class="large-text" rows="5"><?php echo esc_textarea( implode( "\n", $patterns ) ); ?></textarea>
-					<p class="description"><?php esc_html_e( 'One pattern per line, with no slashes and no ~. A pattern is a regular expression matched against the whole message, case-insensitive.', 'arwp-agents' ); ?></p>
+					<p class="description"><?php esc_html_e( 'One pattern per line. Do not wrap it in slashes or ~. Escapes such as \d are kept. Matching is case-insensitive.', 'arwp-agents' ); ?></p>
 				</td>
 			</tr>
 		</table>
@@ -1084,7 +1085,7 @@ JS;
 			}
 			if ( isset( $_POST['arwp_ui_description'] ) ) {
 				$description = sanitize_text_field( wp_unslash( $_POST['arwp_ui_description'] ) );
-				update_post_meta( $post_id, '_arwp_ui_description', $this->cut_chars( $description, 180 ) );
+				update_post_meta( $post_id, '_arwp_ui_description', wp_slash( $this->cut_chars( $description, 180 ) ) );
 			}
 			$logo_id = isset( $_POST['arwp_ui_logo_id'] ) ? absint( $_POST['arwp_ui_logo_id'] ) : 0;
 			if ( $logo_id && ! wp_attachment_is_image( $logo_id ) ) {
@@ -1092,15 +1093,15 @@ JS;
 			}
 			update_post_meta( $post_id, '_arwp_ui_logo_id', $logo_id );
 			$suggestions = isset( $_POST['arwp_ui_suggestions'] ) ? sanitize_textarea_field( wp_unslash( $_POST['arwp_ui_suggestions'] ) ) : '';
-			update_post_meta( $post_id, '_arwp_ui_suggestions', $this->lines_from_textarea( $suggestions, 6, 120 ) );
+			update_post_meta( $post_id, '_arwp_ui_suggestions', wp_slash( $this->lines_from_textarea( $suggestions, 6, 120 ) ) );
 			if ( isset( $_POST['arwp_ui_disclaimer'] ) ) {
-				update_post_meta( $post_id, '_arwp_ui_disclaimer', sanitize_textarea_field( wp_unslash( $_POST['arwp_ui_disclaimer'] ) ) );
+				update_post_meta( $post_id, '_arwp_ui_disclaimer', wp_slash( sanitize_textarea_field( wp_unslash( $_POST['arwp_ui_disclaimer'] ) ) ) );
 			}
 		}
 
 		if ( isset( $_POST['arwp_agent_checks_meta_nonce'] ) && wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['arwp_agent_checks_meta_nonce'] ) ), 'arwp_save_agent_checks_meta_action' ) ) {
 			$phrase_raw = isset( $_POST['arwp_blocked_phrases'] ) ? sanitize_textarea_field( wp_unslash( $_POST['arwp_blocked_phrases'] ) ) : '';
-			update_post_meta( $post_id, '_arwp_blocked_phrases', $this->lines_from_textarea( $phrase_raw, 20, 80 ) );
+			update_post_meta( $post_id, '_arwp_blocked_phrases', wp_slash( $this->lines_from_textarea( $phrase_raw, 20, 80 ) ) );
 
 			$pattern_raw = isset( $_POST['arwp_blocked_patterns'] ) ? sanitize_textarea_field( wp_unslash( $_POST['arwp_blocked_patterns'] ) ) : '';
 			$patterns    = array();
@@ -1121,7 +1122,7 @@ JS;
 					break;
 				}
 			}
-			update_post_meta( $post_id, '_arwp_blocked_patterns', $patterns );
+			update_post_meta( $post_id, '_arwp_blocked_patterns', wp_slash( $patterns ) );
 			if ( $dropped ) {
 				set_transient(
 					'arwp_admin_notice_' . get_current_user_id(),

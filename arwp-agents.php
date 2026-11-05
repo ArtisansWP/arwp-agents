@@ -3,7 +3,7 @@
  * Plugin Name:       ARWP Agents
  * Plugin URI:        https://wordpress.org/plugins/arwp-agents/
  * Description:       Self-hosted AI chat agents for WordPress, using your own OpenRouter API key.
- * Version:           1.6.0
+ * Version:           1.6.1
  * Requires at least: 6.2
  * Requires PHP:      7.4
  * Author:            ARWP
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // Define plugin constants.
-define( 'ARWP_VERSION', '1.6.0' );
+define( 'ARWP_VERSION', '1.6.1' );
 define( 'ARWP_PATH', plugin_dir_path( __FILE__ ) );
 define( 'ARWP_URL', plugin_dir_url( __FILE__ ) );
 define( 'ARWP_BASENAME', plugin_basename( __FILE__ ) );

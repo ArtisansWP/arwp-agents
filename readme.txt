@@ -4,7 +4,7 @@ Tags: ai, chatbot, chat, openrouter, agents
 Requires at least: 6.2
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.6.0
+Stable tag: 1.6.1
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -133,6 +133,9 @@ The chat box still appears. The reply does not. Visitors see a general message. 
 4. The same chat placed on a page with the shortcode.
 
 == Changelog ==
+
+= 1.6.1 =
+* Blocked patterns keep escapes such as \d when an agent is saved or cloned.
 
 = 1.6.0 =
 * Each agent can limit who may chat: anyone who can view the page, logged-in visitors, or specific roles.
