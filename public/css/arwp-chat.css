@@ -145,6 +145,27 @@
 	text-overflow: ellipsis;
 }
 
+.arwp-chat-agent-text {
+	min-width: 0;
+}
+
+.arwp-chat-description {
+	margin: 0;
+	font-size: 12px;
+	color: var(--arwp-muted);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.arwp-chat-logo {
+	height: 28px;
+	width: auto;
+	max-width: 96px;
+	object-fit: contain;
+	flex-shrink: 0;
+}
+
 .arwp-fullscreen-btn {
 	width: 34px;
 	height: 34px;
@@ -595,6 +616,39 @@
 .arwp-chat-error-message.active {
 	opacity: 1;
 	min-height: 18px;
+}
+
+.arwp-suggestions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin-top: 8px;
+}
+
+.arwp-suggestion {
+	border: 1px solid var(--arwp-border);
+	background: var(--arwp-surface);
+	color: var(--arwp-text);
+	border-radius: 999px;
+	padding: 6px 12px;
+	font: inherit;
+	cursor: pointer;
+}
+
+.arwp-chat-disclaimer {
+	margin: 8px 8px 0;
+	font-size: 12px;
+	color: var(--arwp-muted);
+	white-space: pre-wrap;
+}
+
+.arwp-chat-unavailable-note {
+	padding: 24px 16px;
+	color: var(--arwp-muted);
+}
+
+.arwp-chat-unavailable-note a {
+	color: var(--arwp-text);
 }
 
 /* Fullscreen overlay */

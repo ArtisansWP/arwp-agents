@@ -39,6 +39,7 @@ class ARWP_CPT {
 		add_filter( 'pre_get_posts', array( $this, 'filter_agents_by_model' ) );
 		add_action( 'edit_form_after_title', array( $this, 'render_editor_help' ) );
 		add_action( 'admin_notices', array( $this, 'maybe_setup_notice' ) );
+		add_action( 'admin_notices', array( $this, 'maybe_pattern_notice' ) );
 		add_action( 'admin_menu', array( $this, 'remove_add_agent_submenu' ), 99 );
 	}
 
@@ -79,7 +80,7 @@ class ARWP_CPT {
 		if ( ! current_user_can( 'manage_options' ) ) {
 			return;
 		}
-		if ( get_option( 'arwp_openrouter_api_key', '' ) ) {
+		if ( class_exists( 'ARWP_Settings' ) && ARWP_Settings::get_api_key() ) {
 			return;
 		}
 		echo '<div class="notice notice-warning"><p>';
@@ -89,6 +90,25 @@ class ARWP_CPT {
 			'<a href="' . esc_url( admin_url( 'edit.php?post_type=arwp_agent&page=arwp-settings' ) ) . '">' . esc_html__( 'Open Settings', 'arwp-agents' ) . '</a>'
 		);
 		echo '</p></div>';
+	}
+
+	/**
+	 * Warn once when blocked patterns were dropped on save.
+	 */
+	public function maybe_pattern_notice() {
+		$user_id = get_current_user_id();
+		if ( ! $user_id ) {
+			return;
+		}
+
+		$key  = 'arwp_admin_notice_' . $user_id;
+		$text = get_transient( $key );
+		if ( ! is_string( $text ) || '' === $text ) {
+			return;
+		}
+
+		delete_transient( $key );
+		echo '<div class="notice notice-warning"><p>' . esc_html( $text ) . '</p></div>';
 	}
 
 	/**
@@ -320,6 +340,10 @@ class ARWP_CPT {
 			.arwp-meta-table td textarea { width: 100%; max-width: 600px; box-sizing: border-box; }
 			.arwp-meta-table td textarea { min-height: 120px; }
 			.arwp-meta-table td p.description { margin-top: 4px; color: #666; font-size: 12px; }
+			.arwp-role-list label { display: block; margin: 4px 0; }
+			#arwp_access_roles_wrap { margin-top: 8px; }
+			.arwp-role-limits p { margin: 6px 0; }
+			.arwp-role-limits label { display: inline-block; min-width: 140px; }
 			.post-type-arwp_agent #misc-publishing-actions,
 			.post-type-arwp_agent #preview-action,
 			.post-type-arwp_agent #delete-action { display: none !important; }
@@ -335,23 +359,27 @@ class ARWP_CPT {
 		$is_editor = ( 'post.php' === $hook || 'post-new.php' === $hook ) && $screen && 'arwp_agent' === $screen->post_type;
 		$is_list   = ( 'edit.php' === $hook && $screen && 'edit-arwp_agent' === $screen->id );
 
-		wp_register_script( 'arwp-admin', false, array( 'jquery' ), ARWP_VERSION, true );
+		$admin_deps = array( 'jquery' );
+		if ( $is_editor ) {
+			wp_enqueue_media();
+			$admin_deps[] = 'media-editor';
+		}
+
+		wp_register_script( 'arwp-admin', false, $admin_deps, ARWP_VERSION, true );
 
 		if ( $is_editor ) {
 			wp_enqueue_style( 'arwp-select2-css', ARWP_URL . 'assets/vendor/select2/select2.min.css', array(), '4.1.0' );
 			wp_enqueue_script( 'arwp-select2-js', ARWP_URL . 'assets/vendor/select2/select2.min.js', array( 'jquery' ), '4.1.0', true );
 			wp_enqueue_script( 'arwp-admin' );
-			wp_add_inline_script(
+			wp_localize_script(
 				'arwp-admin',
-				"jQuery(function($){
-					$('#arwp_model').select2({ width: '100%', maxWidth: '600px' });
-					$('#arwp_shortcode_input').on('click', function() {
-						this.select();
-						document.execCommand('copy');
-						$('#arwp_shortcode_msg').stop().fadeIn().delay(2000).fadeOut();
-					});
-				});"
+				'arwp_agent_editor',
+				array(
+					'select_logo' => __( 'Select header logo', 'arwp-agents' ),
+					'use_logo'    => __( 'Use this logo', 'arwp-agents' ),
+				)
 			);
+			wp_add_inline_script( 'arwp-admin', $this->editor_script() );
 		}
 
 		if ( $is_list ) {
@@ -367,6 +395,72 @@ class ARWP_CPT {
 				});"
 			);
 		}
+	}
+
+	/**
+	 * Agent editor behavior: model picker, access roles, and header logo.
+	 *
+	 * @return string
+	 */
+	private function editor_script() {
+		return <<<'JS'
+jQuery(function($){
+	$('#arwp_model').select2({ width: '100%', maxWidth: '600px' });
+	$('#arwp_shortcode_input').on('click', function() {
+		this.select();
+		document.execCommand('copy');
+		$('#arwp_shortcode_msg').stop().fadeIn().delay(2000).fadeOut();
+	});
+
+	var accessSelect = $('#arwp_access');
+	var rolesWrap = $('#arwp_access_roles_wrap');
+	var syncAccess = function() {
+		if (accessSelect.val() === 'roles') {
+			rolesWrap.show();
+		} else {
+			rolesWrap.hide();
+		}
+	};
+	accessSelect.on('change', syncAccess);
+	syncAccess();
+
+	var editor = window.arwp_agent_editor || {};
+	var logoFrame;
+	$('#arwp_ui_logo_select').on('click', function(e) {
+		e.preventDefault();
+		if (typeof wp === 'undefined' || !wp.media) {
+			return;
+		}
+		if (logoFrame) {
+			logoFrame.open();
+			return;
+		}
+		logoFrame = wp.media({
+			title: editor.select_logo || 'Select header logo',
+			button: { text: editor.use_logo || 'Use this logo' },
+			library: { type: 'image' },
+			multiple: false
+		});
+		logoFrame.on('select', function() {
+			var attachment = logoFrame.state().get('selection').first().toJSON();
+			var url = attachment.url;
+			if (attachment.sizes && attachment.sizes.medium && attachment.sizes.medium.url) {
+				url = attachment.sizes.medium.url;
+			}
+			$('#arwp_ui_logo_id').val(attachment.id);
+			$('#arwp_ui_logo_preview').empty().append($('<img>', { src: url, alt: '' }).css({ maxHeight: '48px', width: 'auto' }));
+			$('#arwp_ui_logo_remove').show();
+		});
+		logoFrame.open();
+	});
+	$('#arwp_ui_logo_remove').on('click', function(e) {
+		e.preventDefault();
+		$('#arwp_ui_logo_id').val('0');
+		$('#arwp_ui_logo_preview').empty();
+		$(this).hide();
+	});
+});
+JS;
 	}
 
 	/**
@@ -455,6 +549,15 @@ class ARWP_CPT {
 			'arwp_agent',
 			'normal',
 			'high'
+		);
+
+		add_meta_box(
+			'arwp_agent_message_checks',
+			__( 'Message checks', 'arwp-agents' ),
+			array( $this, 'render_agent_checks_meta_box' ),
+			'arwp_agent',
+			'normal',
+			'default'
 		);
 
 		add_meta_box(
@@ -552,6 +655,101 @@ class ARWP_CPT {
 				<td>
 					<input type="color" name="arwp_ui_primary_color" id="arwp_ui_primary_color" value="<?php echo esc_attr( $primary_color ); ?>" />
 					<p class="description"><?php esc_html_e( 'Used for buttons and user message bubbles.', 'arwp-agents' ); ?></p>
+				</td>
+			</tr>
+			<?php
+			$ui_description = get_post_meta( $post->ID, '_arwp_ui_description', true );
+			$logo_id        = absint( get_post_meta( $post->ID, '_arwp_ui_logo_id', true ) );
+			$logo_url       = $logo_id ? wp_get_attachment_image_url( $logo_id, 'medium' ) : '';
+			$suggestions    = get_post_meta( $post->ID, '_arwp_ui_suggestions', true );
+			$disclaimer     = get_post_meta( $post->ID, '_arwp_ui_disclaimer', true );
+			if ( ! is_string( $ui_description ) ) {
+				$ui_description = '';
+			}
+			if ( ! is_string( $logo_url ) ) {
+				$logo_url = '';
+			}
+			if ( ! is_array( $suggestions ) ) {
+				$suggestions = array();
+			}
+			if ( ! is_string( $disclaimer ) ) {
+				$disclaimer = '';
+			}
+			$suggestions = array_values( array_filter( $suggestions, 'is_string' ) );
+			?>
+			<tr>
+				<th><label for="arwp_ui_description"><?php esc_html_e( 'Short description', 'arwp-agents' ); ?></label></th>
+				<td>
+					<input type="text" name="arwp_ui_description" id="arwp_ui_description" value="<?php echo esc_attr( $ui_description ); ?>" class="regular-text" maxlength="180" />
+					<p class="description"><?php esc_html_e( 'Shown under the chat title. Leave empty to hide it.', 'arwp-agents' ); ?></p>
+				</td>
+			</tr>
+			<tr>
+				<th><label for="arwp_ui_logo_id"><?php esc_html_e( 'Header logo', 'arwp-agents' ); ?></label></th>
+				<td>
+					<input type="hidden" name="arwp_ui_logo_id" id="arwp_ui_logo_id" value="<?php echo esc_attr( $logo_id ); ?>" />
+					<div id="arwp_ui_logo_preview">
+						<?php if ( '' !== $logo_url ) : ?>
+							<img src="<?php echo esc_url( $logo_url ); ?>" alt="" style="max-height:48px;width:auto;" />
+						<?php endif; ?>
+					</div>
+					<p>
+						<button type="button" class="button" id="arwp_ui_logo_select"><?php esc_html_e( 'Select logo', 'arwp-agents' ); ?></button>
+						<button type="button" class="button" id="arwp_ui_logo_remove" <?php echo '' === $logo_url ? 'style="display:none;"' : ''; ?>><?php esc_html_e( 'Remove logo', 'arwp-agents' ); ?></button>
+					</p>
+					<p class="description"><?php esc_html_e( 'Shown in the chat header, beside the avatar. The featured image stays the avatar.', 'arwp-agents' ); ?></p>
+				</td>
+			</tr>
+			<tr>
+				<th><label for="arwp_ui_suggestions"><?php esc_html_e( 'Suggested messages', 'arwp-agents' ); ?></label></th>
+				<td>
+					<textarea name="arwp_ui_suggestions" id="arwp_ui_suggestions" class="large-text" rows="4"><?php echo esc_textarea( implode( "\n", $suggestions ) ); ?></textarea>
+					<p class="description"><?php esc_html_e( 'One message per line, up to 6. They appear when the chat has no messages yet. Choosing one sends it.', 'arwp-agents' ); ?></p>
+				</td>
+			</tr>
+			<tr>
+				<th><label for="arwp_ui_disclaimer"><?php esc_html_e( 'Disclaimer', 'arwp-agents' ); ?></label></th>
+				<td>
+					<textarea name="arwp_ui_disclaimer" id="arwp_ui_disclaimer" class="large-text" rows="3"><?php echo esc_textarea( $disclaimer ); ?></textarea>
+					<p class="description"><?php esc_html_e( 'Plain text shown under the message box. Leave empty to hide it.', 'arwp-agents' ); ?></p>
+				</td>
+			</tr>
+		</table>
+		<?php
+	}
+
+	/**
+	 * Blocked phrases and patterns.
+	 *
+	 * @param WP_Post $post Current post.
+	 */
+	public function render_agent_checks_meta_box( $post ) {
+		wp_nonce_field( 'arwp_save_agent_checks_meta_action', 'arwp_agent_checks_meta_nonce' );
+
+		$phrases  = get_post_meta( $post->ID, '_arwp_blocked_phrases', true );
+		$patterns = get_post_meta( $post->ID, '_arwp_blocked_patterns', true );
+		if ( ! is_array( $phrases ) ) {
+			$phrases = array();
+		}
+		if ( ! is_array( $patterns ) ) {
+			$patterns = array();
+		}
+		$phrases  = array_values( array_filter( $phrases, 'is_string' ) );
+		$patterns = array_values( array_filter( $patterns, 'is_string' ) );
+		?>
+		<table class="arwp-meta-table">
+			<tr>
+				<th><label for="arwp_blocked_phrases"><?php esc_html_e( 'Blocked phrases', 'arwp-agents' ); ?></label></th>
+				<td>
+					<textarea name="arwp_blocked_phrases" id="arwp_blocked_phrases" class="large-text" rows="5"><?php echo esc_textarea( implode( "\n", $phrases ) ); ?></textarea>
+					<p class="description"><?php esc_html_e( 'One phrase per line. A message that contains any of these is rejected.', 'arwp-agents' ); ?></p>
+				</td>
+			</tr>
+			<tr>
+				<th><label for="arwp_blocked_patterns"><?php esc_html_e( 'Blocked patterns', 'arwp-agents' ); ?></label></th>
+				<td>
+					<textarea name="arwp_blocked_patterns" id="arwp_blocked_patterns" class="large-text" rows="5"><?php echo esc_textarea( implode( "\n", $patterns ) ); ?></textarea>
+					<p class="description"><?php esc_html_e( 'One pattern per line, with no slashes and no ~. A pattern is a regular expression matched against the whole message, case-insensitive.', 'arwp-agents' ); ?></p>
 				</td>
 			</tr>
 		</table>
@@ -696,6 +894,67 @@ class ARWP_CPT {
 					</p>
 				</td>
 			</tr>
+			<?php
+			$access = get_post_meta( $post->ID, '_arwp_access', true );
+			if ( ! in_array( $access, array( 'public', 'logged_in', 'roles' ), true ) ) {
+				$access = 'public';
+			}
+			$access_roles = get_post_meta( $post->ID, '_arwp_access_roles', true );
+			if ( ! is_array( $access_roles ) ) {
+				$access_roles = array();
+			}
+			$rate_user = get_post_meta( $post->ID, '_arwp_rate_limit_per_user', true );
+			if ( '' === $rate_user || false === $rate_user || null === $rate_user ) {
+				$rate_user = 0;
+			}
+			$role_limits = get_post_meta( $post->ID, '_arwp_rate_limit_per_role', true );
+			if ( ! is_array( $role_limits ) ) {
+				$role_limits = array();
+			}
+			$editable_roles = $this->editable_roles();
+			?>
+			<tr>
+				<th><label for="arwp_access"><?php esc_html_e( 'Who can use this chat', 'arwp-agents' ); ?></label></th>
+				<td>
+					<select name="arwp_access" id="arwp_access">
+						<option value="public" <?php selected( $access, 'public' ); ?>><?php esc_html_e( 'Anyone who can view the page', 'arwp-agents' ); ?></option>
+						<option value="logged_in" <?php selected( $access, 'logged_in' ); ?>><?php esc_html_e( 'Logged-in visitors', 'arwp-agents' ); ?></option>
+						<option value="roles" <?php selected( $access, 'roles' ); ?>><?php esc_html_e( 'Specific roles', 'arwp-agents' ); ?></option>
+					</select>
+					<p class="description"><?php esc_html_e( 'Who is allowed to send messages. People who can edit this agent can always open it.', 'arwp-agents' ); ?></p>
+					<div id="arwp_access_roles_wrap" class="arwp-role-list" <?php echo 'roles' === $access ? '' : 'style="display:none;"'; ?>>
+						<?php foreach ( $editable_roles as $role_slug => $role_data ) : ?>
+							<label for="arwp_access_role_<?php echo esc_attr( $role_slug ); ?>">
+								<input type="checkbox" name="arwp_access_roles[]" id="arwp_access_role_<?php echo esc_attr( $role_slug ); ?>" value="<?php echo esc_attr( $role_slug ); ?>" <?php checked( in_array( $role_slug, $access_roles, true ) ); ?> />
+								<?php echo esc_html( translate_user_role( $role_data['name'] ) ); ?>
+							</label>
+						<?php endforeach; ?>
+						<p class="description"><?php esc_html_e( 'Used only when Specific roles is selected.', 'arwp-agents' ); ?></p>
+					</div>
+				</td>
+			</tr>
+			<tr>
+				<th><label for="arwp_rate_limit_per_user"><?php esc_html_e( 'Max messages per logged-in visitor / hour', 'arwp-agents' ); ?></label></th>
+				<td>
+					<input type="number" name="arwp_rate_limit_per_user" id="arwp_rate_limit_per_user" min="0" step="1" value="<?php echo esc_attr( $rate_user ); ?>" />
+					<p class="description"><?php esc_html_e( 'Each account has its own hourly count for this agent. 0 means no cap. Guests are not counted here.', 'arwp-agents' ); ?></p>
+				</td>
+			</tr>
+			<tr>
+				<th><?php esc_html_e( 'Max messages per role / hour', 'arwp-agents' ); ?></th>
+				<td>
+					<div class="arwp-role-limits">
+						<?php foreach ( $editable_roles as $role_slug => $role_data ) : ?>
+							<?php $role_limit = isset( $role_limits[ $role_slug ] ) ? intval( $role_limits[ $role_slug ] ) : 0; ?>
+							<p>
+								<label for="arwp_role_limit_<?php echo esc_attr( $role_slug ); ?>"><?php echo esc_html( translate_user_role( $role_data['name'] ) ); ?></label>
+								<input type="number" name="arwp_role_limits[<?php echo esc_attr( $role_slug ); ?>]" id="arwp_role_limit_<?php echo esc_attr( $role_slug ); ?>" min="0" step="1" value="<?php echo esc_attr( $role_limit ); ?>" />
+							</p>
+						<?php endforeach; ?>
+					</div>
+					<p class="description"><?php esc_html_e( 'Every logged-in visitor with that role shares one hourly count for this agent. 0 means that role has no extra cap. These numbers apply even when access is Anyone, but only to logged-in visitors.', 'arwp-agents' ); ?></p>
+				</td>
+			</tr>
 		</table>
 		<?php
 	}
@@ -765,6 +1024,41 @@ class ARWP_CPT {
 			update_post_meta( $post_id, '_arwp_history_context_limit', $history_limit );
 		}
 
+		$access = isset( $_POST['arwp_access'] ) ? sanitize_text_field( wp_unslash( $_POST['arwp_access'] ) ) : 'public';
+		if ( ! in_array( $access, array( 'public', 'logged_in', 'roles' ), true ) ) {
+			$access = 'public';
+		}
+		update_post_meta( $post_id, '_arwp_access', $access );
+
+		$valid_roles  = array_keys( $this->editable_roles() );
+		$access_roles = array();
+		$posted_roles = isset( $_POST['arwp_access_roles'] ) ? map_deep( wp_unslash( $_POST['arwp_access_roles'] ), 'sanitize_text_field' ) : array();
+		if ( is_array( $posted_roles ) ) {
+			foreach ( $posted_roles as $role ) {
+				$role = sanitize_key( $role );
+				if ( in_array( $role, $valid_roles, true ) && ! in_array( $role, $access_roles, true ) ) {
+					$access_roles[] = $role;
+				}
+			}
+		}
+		update_post_meta( $post_id, '_arwp_access_roles', $access_roles );
+
+		$rate_user = isset( $_POST['arwp_rate_limit_per_user'] ) ? intval( $_POST['arwp_rate_limit_per_user'] ) : 0;
+		update_post_meta( $post_id, '_arwp_rate_limit_per_user', min( 10000, max( 0, $rate_user ) ) );
+
+		$role_limits   = array();
+		$posted_limits = isset( $_POST['arwp_role_limits'] ) ? map_deep( wp_unslash( $_POST['arwp_role_limits'] ), 'sanitize_text_field' ) : array();
+		if ( is_array( $posted_limits ) ) {
+			foreach ( $posted_limits as $role => $limit ) {
+				$role = sanitize_key( $role );
+				if ( ! in_array( $role, $valid_roles, true ) ) {
+					continue;
+				}
+				$role_limits[ $role ] = min( 100000, max( 0, intval( $limit ) ) );
+			}
+		}
+		update_post_meta( $post_id, '_arwp_rate_limit_per_role', $role_limits );
+
 		if ( isset( $_POST['arwp_agent_ui_meta_nonce'] ) && wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['arwp_agent_ui_meta_nonce'] ) ), 'arwp_save_agent_ui_meta_action' ) ) {
 			if ( isset( $_POST['arwp_ui_theme'] ) ) {
 				$theme = sanitize_text_field( wp_unslash( $_POST['arwp_ui_theme'] ) );
@@ -788,6 +1082,123 @@ class ARWP_CPT {
 					update_post_meta( $post_id, '_arwp_ui_primary_color', $color );
 				}
 			}
+			if ( isset( $_POST['arwp_ui_description'] ) ) {
+				$description = sanitize_text_field( wp_unslash( $_POST['arwp_ui_description'] ) );
+				update_post_meta( $post_id, '_arwp_ui_description', $this->cut_chars( $description, 180 ) );
+			}
+			$logo_id = isset( $_POST['arwp_ui_logo_id'] ) ? absint( $_POST['arwp_ui_logo_id'] ) : 0;
+			if ( $logo_id && ! wp_attachment_is_image( $logo_id ) ) {
+				$logo_id = 0;
+			}
+			update_post_meta( $post_id, '_arwp_ui_logo_id', $logo_id );
+			$suggestions = isset( $_POST['arwp_ui_suggestions'] ) ? sanitize_textarea_field( wp_unslash( $_POST['arwp_ui_suggestions'] ) ) : '';
+			update_post_meta( $post_id, '_arwp_ui_suggestions', $this->lines_from_textarea( $suggestions, 6, 120 ) );
+			if ( isset( $_POST['arwp_ui_disclaimer'] ) ) {
+				update_post_meta( $post_id, '_arwp_ui_disclaimer', sanitize_textarea_field( wp_unslash( $_POST['arwp_ui_disclaimer'] ) ) );
+			}
 		}
+
+		if ( isset( $_POST['arwp_agent_checks_meta_nonce'] ) && wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['arwp_agent_checks_meta_nonce'] ) ), 'arwp_save_agent_checks_meta_action' ) ) {
+			$phrase_raw = isset( $_POST['arwp_blocked_phrases'] ) ? sanitize_textarea_field( wp_unslash( $_POST['arwp_blocked_phrases'] ) ) : '';
+			update_post_meta( $post_id, '_arwp_blocked_phrases', $this->lines_from_textarea( $phrase_raw, 20, 80 ) );
+
+			$pattern_raw = isset( $_POST['arwp_blocked_patterns'] ) ? sanitize_textarea_field( wp_unslash( $_POST['arwp_blocked_patterns'] ) ) : '';
+			$patterns    = array();
+			$dropped     = false;
+			foreach ( $this->textarea_lines( $pattern_raw ) as $line ) {
+				$line = sanitize_text_field( $line );
+				if ( '' === $line ) {
+					continue;
+				}
+				if ( ! arwp_pattern_is_safe( $line ) ) {
+					$dropped = true;
+					continue;
+				}
+				if ( ! in_array( $line, $patterns, true ) ) {
+					$patterns[] = $line;
+				}
+				if ( count( $patterns ) >= 10 ) {
+					break;
+				}
+			}
+			update_post_meta( $post_id, '_arwp_blocked_patterns', $patterns );
+			if ( $dropped ) {
+				set_transient(
+					'arwp_admin_notice_' . get_current_user_id(),
+					__( 'Some patterns were not saved because they are not valid.', 'arwp-agents' ),
+					60
+				);
+			}
+		}
+	}
+
+	/**
+	 * Roles the current user is allowed to assign.
+	 *
+	 * @return array<string, array>
+	 */
+	private function editable_roles() {
+		if ( ! function_exists( 'get_editable_roles' ) ) {
+			require_once ABSPATH . 'wp-admin/includes/user.php';
+		}
+
+		$roles = get_editable_roles();
+		return is_array( $roles ) ? $roles : array();
+	}
+
+	/**
+	 * Cut a string to a character limit.
+	 *
+	 * @param string $text  Text.
+	 * @param int    $limit Maximum characters.
+	 * @return string
+	 */
+	private function cut_chars( $text, $limit ) {
+		$text  = (string) $text;
+		$limit = (int) $limit;
+		if ( function_exists( 'mb_substr' ) ) {
+			return mb_substr( $text, 0, $limit );
+		}
+
+		return substr( $text, 0, $limit );
+	}
+
+	/**
+	 * Split a textarea into trimmed lines.
+	 *
+	 * @param mixed $raw Submitted text.
+	 * @return array<int, string>
+	 */
+	private function textarea_lines( $raw ) {
+		$raw = str_replace( array( "\r\n", "\r" ), "\n", (string) $raw );
+		return explode( "\n", $raw );
+	}
+
+	/**
+	 * Keep the first non-empty lines, trimmed and cut to length.
+	 *
+	 * @param mixed $raw   Submitted text.
+	 * @param int   $max   Maximum number of lines.
+	 * @param int   $chars Maximum characters per line.
+	 * @return array<int, string>
+	 */
+	private function lines_from_textarea( $raw, $max, $chars ) {
+		$lines = array();
+		foreach ( $this->textarea_lines( $raw ) as $line ) {
+			$line = sanitize_text_field( trim( $line ) );
+			if ( '' === $line ) {
+				continue;
+			}
+			$line = $this->cut_chars( $line, $chars );
+			if ( '' === $line || in_array( $line, $lines, true ) ) {
+				continue;
+			}
+			$lines[] = $line;
+			if ( count( $lines ) >= (int) $max ) {
+				break;
+			}
+		}
+
+		return $lines;
 	}
 }

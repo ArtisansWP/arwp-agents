@@ -4,7 +4,7 @@ Tags: ai, chatbot, chat, openrouter, agents
 Requires at least: 6.2
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.5.0
+Stable tag: 1.6.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -18,7 +18,9 @@ The chat lives on your site. Each conversation is stored in your database, and y
 
 = Connect OpenRouter =
 
-Go to ARWP Agents → Settings. Paste your API key, choose a default model, and use Test Connection. A working key loads the model list from your OpenRouter account. That list is kept for a week.
+Go to ARWP Agents → Settings. Paste your API key, choose a default model, and use Test Connection. The key is encrypted in the database. You can instead set it in wp-config.php with define( 'ARWP_OPENROUTER_API_KEY', '...' ); and that value is the one the plugin uses. A working key loads the model list from your OpenRouter account. That list is kept for a week.
+
+The same screen has Show names and contact details in Chats. Leave it off to hide account names and replace emails, phone numbers, and IP addresses in chat titles and messages.
 
 You can create a key at https://openrouter.ai/
 
@@ -31,9 +33,17 @@ Go to ARWP Agents → Add Agent. Name it, then set the fields under Agent & Mode
 * Temperature, from 0 to 2. Lower answers vary less. The starting value is 0.7.
 * Max tokens. The longest reply the model may write. The starting value is 1000.
 * Cooldown. How many seconds someone must wait between messages in the same chat. It starts at 5. Set it to 0 to turn the wait off.
+* Who can use this chat. Anyone who can view the page, logged-in visitors, or specific roles. People who can edit the agent can always open it.
 * Messages per visitor, per hour. Counted by IP address. It starts at 30. Set it to 0 for no cap.
+* Messages per logged-in visitor, per hour. Each account has its own count. It starts at 0, which means no cap. Guests are not counted.
+* Messages per role, per hour. Everyone with that role shares one count. 0 means that role has no extra cap.
 * Messages for this agent, per hour. Shared by everyone using that agent. It starts at 200. Set it to 0 for no cap.
 * History. How many earlier messages are included with each new one. Leave it empty to send the last 40. A longer history costs more.
+
+Message checks are separate from the prompt.
+
+* Blocked phrases. One phrase per line. A message that contains one is rejected and is not stored.
+* Blocked patterns. One regular expression per line. A pattern that is not valid is not saved.
 
 Chat Appearance is separate from the prompt.
 
@@ -43,6 +53,10 @@ Chat Appearance is separate from the prompt.
 * The placeholder in the message box.
 * A color for the send button and the visitor's messages. It starts as blue.
 * A featured image, used as the avatar.
+* A short description under the title.
+* A header logo beside the avatar.
+* Suggested messages, shown when the chat is empty. Choosing one sends it.
+* A disclaimer under the message box. It is shown as plain text.
 
 Publish the agent. The shortcode is in the sidebar, and again in the agents list:
 
@@ -54,11 +68,11 @@ Use the ID shown for that agent. Paste the shortcode into any page or post. A dr
 
 The greeting appears first. Replies arrive as they are written, and a visitor can stop one that is still coming in. Messages can include Markdown. There is a copy button on the agent's replies, and a button to open the chat full screen. One message can be up to 8,000 characters.
 
-The browser stores a token for that chat, so the same visitor on the same device picks up the conversation later. Anyone who can open the page can write a message, including people who are not logged in.
+The browser stores a token for that chat, so the same visitor on the same device picks up the conversation later. By default anyone who can open the page can write a message, including people who are not logged in. An agent can instead require a logged-in visitor or a specific role.
 
 = Read the chats =
 
-ARWP Agents → Chats lists each conversation, the agent, whether the visitor was a guest or a logged-in user, the number of messages, and the tokens used. Open a row to read it, or delete it.
+ARWP Agents → Chats lists each conversation, the agent, whether the visitor was a guest or a logged-in visitor, the number of messages, and the tokens used. Open a row to read it, or delete it. Names and contact details stay hidden until an administrator turns that on in Settings.
 
 Only administrators can create agents, change the API key, or open Chats.
 
@@ -93,15 +107,19 @@ Yes. An agent can follow the default model from Settings, or use another model f
 
 = Who can send a message? =
 
-Anyone who can view the page. They do not need a WordPress account. Only administrators can create or edit agents.
+Each agent chooses anyone who can view the page, logged-in visitors, or specific roles. People who can edit that agent can always open it. Only administrators can create or edit agents.
 
 = Can visitors spend my OpenRouter credit? =
 
-Yes, when the shortcode is on a public page. A new agent waits 5 seconds between messages, allows 30 messages per visitor each hour, and 200 messages an hour for that agent. Change the numbers on the agent. Set one to 0 to remove that limit.
+Yes, when the shortcode is on a public page and the agent allows that visitor. A new agent waits 5 seconds between messages, allows 30 messages per visitor each hour, and 200 messages an hour for that agent. You can also cap messages per logged-in account and per role. Set a number to 0 to turn that cap off. Existing agents start with the account and role caps off.
+
+= Where is the API key stored? =
+
+In Settings, where it is encrypted in the database, or in wp-config.php as define( 'ARWP_OPENROUTER_API_KEY', '...' );. The constant wins.
 
 = Where are the conversations stored? =
 
-On your site. The visitor's browser keeps a token so the chat can continue. Administrators can read and delete conversations under ARWP Agents → Chats. Deleting the plugin also deletes the agents, the chats, and the saved API key.
+On your site. The visitor's browser keeps a token so the chat can continue. Administrators can read and delete conversations under ARWP Agents → Chats. Names and contact details stay hidden until an administrator turns on Show names and contact details in Chats. Deleting the plugin also deletes the agents, the chats, and the saved API key.
 
 = What if the key is missing or OpenRouter does not answer? =
 
@@ -115,6 +133,13 @@ The chat box still appears. The reply does not. Visitors see a general message. 
 4. The same chat placed on a page with the shortcode.
 
 == Changelog ==
+
+= 1.6.0 =
+* Each agent can limit who may chat: anyone who can view the page, logged-in visitors, or specific roles.
+* Added hourly caps per logged-in account and per role.
+* The OpenRouter key is encrypted in the database, or read from ARWP_OPENROUTER_API_KEY in wp-config.php.
+* Chats hides names and contact details unless an administrator turns that on.
+* Agents can block phrases and patterns, and show a description, header logo, suggested messages, and a disclaimer. A blocked pattern cannot stall the site.
 
 = 1.5.0 =
 * Renamed the plugin to ARWP Agents.

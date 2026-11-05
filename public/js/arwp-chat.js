@@ -290,11 +290,56 @@
 				}
 			};
 
+			const showSuggestions = () => {
+				let suggestions = [];
+				try {
+					suggestions = JSON.parse(container.getAttribute('data-suggestions') || '[]');
+				} catch (err) {
+					suggestions = [];
+				}
+				if (!Array.isArray(suggestions) || !suggestions.length) {
+					return;
+				}
+
+				const row = document.createElement('div');
+				row.className = 'arwp-suggestions';
+				suggestions.forEach((text) => {
+					if (typeof text !== 'string' || text.trim() === '') {
+						return;
+					}
+					const button = document.createElement('button');
+					button.type = 'button';
+					button.className = 'arwp-suggestion';
+					button.textContent = text;
+					button.addEventListener('click', () => {
+						if (activeController || isCooldownActive) {
+							return;
+						}
+						textarea.value = text;
+						if (typeof form.requestSubmit === 'function') {
+							form.requestSubmit();
+						} else {
+							form.dispatchEvent(new Event('submit', { cancelable: true }));
+						}
+					});
+					row.appendChild(button);
+				});
+
+				if (row.childNodes.length) {
+					messagesContainer.appendChild(row);
+				}
+			};
+
+			const showEmptyState = () => {
+				showGreeting();
+				showSuggestions();
+			};
+
 			// Load conversation history on startup.
 			const loadHistory = async(tokenToLoad) => {
 				if (!tokenToLoad) {
 					messagesContainer.innerHTML = '';
-					showGreeting();
+					showEmptyState();
 					return;
 				}
 
@@ -316,7 +361,7 @@
 
 					if (response.ok && data.success && data.messages) {
 						if (data.messages.length === 0) {
-							showGreeting();
+							showEmptyState();
 						} else {
 							data.messages.forEach(msg => {
 								if (msg.role === 'user' || msg.role === 'assistant') {
@@ -330,12 +375,12 @@
 							sessionToken = '';
 							localStorage.removeItem(tokenKey);
 						}
-						showGreeting();
+						showEmptyState();
 					}
 				} catch (err) {
 					console.error('ARWP Agents History Loading Error:', err);
 					messagesContainer.innerHTML = '';
-					showGreeting();
+					showEmptyState();
 				}
 			};
 
@@ -571,6 +616,11 @@
 
 			form.addEventListener('submit', async(e) => {
 				e.preventDefault();
+
+				const suggestionRow = container.querySelector('.arwp-suggestions');
+				if (suggestionRow) {
+					suggestionRow.remove();
+				}
 
 				// The send control doubles as stop while a reply is streaming.
 				if (activeController) {

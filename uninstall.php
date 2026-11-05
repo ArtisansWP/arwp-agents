@@ -29,6 +29,7 @@ call_user_func(
 		$options = array(
 			'arwp_openrouter_api_key',
 			'arwp_openrouter_default_model',
+			'arwp_chats_show_details',
 			'arwp_openai_api_key',
 			'arwp_rag_chunk_size',
 			'arwp_api_status',

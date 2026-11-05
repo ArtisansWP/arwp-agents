@@ -165,6 +165,11 @@ class ARWP_API {
 			return new WP_Error( 'arwp_agent_not_found', __( 'Agent not found.', 'arwp-agents' ), array( 'status' => 404 ) );
 		}
 
+		$access_error = $this->access_denied_error( $agent_id );
+		if ( is_wp_error( $access_error ) ) {
+			return $access_error;
+		}
+
 		$max_chars = arwp_max_message_chars();
 		$msg_chars = function_exists( 'mb_strlen' ) ? mb_strlen( $new_message ) : strlen( $new_message );
 		if ( $max_chars > 0 && $msg_chars > $max_chars ) {
@@ -181,6 +186,14 @@ class ARWP_API {
 
 		if ( '' === trim( $new_message ) ) {
 			return new WP_Error( 'arwp_empty_message', __( 'Message content cannot be empty.', 'arwp-agents' ), array( 'status' => 400 ) );
+		}
+
+		if ( arwp_message_is_blocked( $agent_id, $new_message ) ) {
+			return new WP_Error(
+				'arwp_message_blocked',
+				__( 'This message can\'t be sent.', 'arwp-agents' ),
+				array( 'status' => 400 )
+			);
 		}
 
 		$system_prompt = get_post_meta( $agent_id, '_arwp_system_prompt', true );
@@ -358,7 +371,7 @@ class ARWP_API {
 			)
 		);
 
-		$api_key = get_option( 'arwp_openrouter_api_key', '' );
+		$api_key = class_exists( 'ARWP_Settings' ) ? ARWP_Settings::get_api_key() : '';
 		if ( empty( $api_key ) ) {
 			return new WP_Error(
 				'arwp_missing_api_key',
@@ -373,6 +386,32 @@ class ARWP_API {
 			'session_token' => $session_token,
 			'payload'       => $openrouter_payload,
 			'api_key'       => $api_key,
+		);
+	}
+
+	/**
+	 * 403 when this visitor is not allowed to use the agent.
+	 *
+	 * @param int $agent_id Agent post ID.
+	 * @return WP_Error|null
+	 */
+	private function access_denied_error( $agent_id ) {
+		if ( arwp_visitor_can_use_agent( $agent_id ) ) {
+			return null;
+		}
+
+		if ( 'login' === arwp_agent_access_state( $agent_id ) ) {
+			return new WP_Error(
+				'arwp_access_denied',
+				__( 'Log in to use this chat.', 'arwp-agents' ),
+				array( 'status' => 403 )
+			);
+		}
+
+		return new WP_Error(
+			'arwp_access_denied',
+			__( 'You do not have access to this chat.', 'arwp-agents' ),
+			array( 'status' => 403 )
 		);
 	}
 
@@ -412,6 +451,47 @@ class ARWP_API {
 			);
 			if ( is_wp_error( $ip_hit ) ) {
 				return $ip_hit;
+			}
+		}
+
+		$user_id = get_current_user_id();
+		if ( $user_id > 0 ) {
+			$user_message = __( 'You have sent too many messages. Please wait before trying again.', 'arwp-agents' );
+			$user_limit   = arwp_meta_int( get_post_meta( $agent_id, '_arwp_rate_limit_per_user', true ), 0 );
+			$user_hit     = self::hit_rate_bucket(
+				'arwp_rl_user_' . $agent_id . '_' . $user_id,
+				$user_limit,
+				$user_message
+			);
+			if ( is_wp_error( $user_hit ) ) {
+				return $user_hit;
+			}
+
+			$role_limits = get_post_meta( $agent_id, '_arwp_rate_limit_per_role', true );
+			if ( ! is_array( $role_limits ) ) {
+				$role_limits = array();
+			}
+
+			$user = wp_get_current_user();
+			foreach ( (array) $user->roles as $role ) {
+				$role_slug = sanitize_key( $role );
+				if ( '' === $role_slug || ! isset( $role_limits[ $role_slug ] ) ) {
+					continue;
+				}
+
+				$role_limit = intval( $role_limits[ $role_slug ] );
+				if ( $role_limit <= 0 ) {
+					continue;
+				}
+
+				$role_hit = self::hit_rate_bucket(
+					'arwp_rl_role_' . $agent_id . '_' . substr( $role_slug, 0, 40 ),
+					$role_limit,
+					$user_message
+				);
+				if ( is_wp_error( $role_hit ) ) {
+					return $role_hit;
+				}
 			}
 		}
 
@@ -547,7 +627,7 @@ class ARWP_API {
 	 * @return array|WP_Error { content, tokens }
 	 */
 	private function dispatch_openrouter( $payload ) {
-		$api_key = get_option( 'arwp_openrouter_api_key', '' );
+		$api_key = class_exists( 'ARWP_Settings' ) ? ARWP_Settings::get_api_key() : '';
 
 		$response = wp_remote_post(
 			'https://openrouter.ai/api/v1/chat/completions', // phpcs:ignore PluginCheck.CodeAnalysis.AIProvider.DirectIntegration -- OpenRouter is the product. The WordPress AI client needs WordPress 7.0.
@@ -911,6 +991,20 @@ class ARWP_API {
 
 		if ( ! $agent_id || empty( $session_token ) ) {
 			return new WP_Error( 'arwp_invalid_params', __( 'Agent ID and Session Token are required.', 'arwp-agents' ), array( 'status' => 400 ) );
+		}
+
+		$agent_post = get_post( $agent_id );
+		if ( ! $agent_post || 'arwp_agent' !== $agent_post->post_type ) {
+			return new WP_Error( 'arwp_agent_not_found', __( 'Agent not found.', 'arwp-agents' ), array( 'status' => 404 ) );
+		}
+
+		if ( 'publish' !== $agent_post->post_status && ! current_user_can( 'edit_post', $agent_id ) ) {
+			return new WP_Error( 'arwp_agent_not_found', __( 'Agent not found.', 'arwp-agents' ), array( 'status' => 404 ) );
+		}
+
+		$access_error = $this->access_denied_error( $agent_id );
+		if ( is_wp_error( $access_error ) ) {
+			return $access_error;
 		}
 
 		$session = $this->get_owned_session( $agent_id, $session_token );

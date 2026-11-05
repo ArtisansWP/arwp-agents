@@ -199,11 +199,12 @@ class ARWP_Conversations {
 								'arwp_delete_session'
 							);
 							$user_label = intval( $session->user_id ) > 0 ? $this->user_label( $session->user_id ) : __( 'Guest', 'arwp-agents' );
+							$chat_title = arwp_redact_personal_details( $session->title ? $session->title : __( 'Untitled', 'arwp-agents' ) );
 							?>
 							<tr>
 								<td>
 									<a href="<?php echo esc_url( $view_url ); ?>">
-										<strong><?php echo esc_html( $session->title ? $session->title : __( 'Untitled', 'arwp-agents' ) ); ?></strong>
+										<strong><?php echo esc_html( $chat_title ); ?></strong>
 									</a>
 								</td>
 								<td>
@@ -289,7 +290,7 @@ class ARWP_Conversations {
 		);
 		?>
 		<div class="wrap">
-			<h1><?php echo esc_html( $session->title ? $session->title : __( 'Untitled', 'arwp-agents' ) ); ?></h1>
+			<h1><?php echo esc_html( arwp_redact_personal_details( $session->title ? $session->title : __( 'Untitled', 'arwp-agents' ) ) ); ?></h1>
 			<p>
 				<a href="<?php echo esc_url( $back_url ); ?>">&larr; <?php esc_html_e( 'All chats', 'arwp-agents' ); ?></a>
 				|
@@ -314,7 +315,7 @@ class ARWP_Conversations {
 							&middot; <?php echo esc_html( sprintf( __( '%d tokens', 'arwp-agents' ), intval( $msg->tokens_used ) ) ); ?>
 						<?php endif; ?>
 					</p>
-					<div style="white-space:pre-wrap;word-break:break-word;"><?php echo esc_html( $msg->content ); ?></div>
+					<div style="white-space:pre-wrap;word-break:break-word;"><?php echo esc_html( arwp_redact_personal_details( $msg->content ) ); ?></div>
 				</div>
 			<?php endforeach; ?>
 		</div>
@@ -328,9 +329,18 @@ class ARWP_Conversations {
 	 * @return string
 	 */
 	private function user_label( $user_id ) {
+		$user_id = intval( $user_id );
+		if ( '1' !== (string) get_option( 'arwp_chats_show_details', '0' ) ) {
+			return $user_id > 0 ? __( 'Logged-in visitor', 'arwp-agents' ) : __( 'Guest', 'arwp-agents' );
+		}
+
+		if ( $user_id <= 0 ) {
+			return __( 'Guest', 'arwp-agents' );
+		}
+
 		$user = get_userdata( $user_id );
 		if ( ! $user ) {
-			return '#' . intval( $user_id );
+			return '#' . $user_id;
 		}
 
 		return $user->display_name . ' (' . $user->user_login . ')';

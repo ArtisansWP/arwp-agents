@@ -82,7 +82,14 @@ class ARWP_Shortcode {
 			return '<p class="arwp-error">' . esc_html__( 'This chat is not available.', 'arwp-agents' ) . '</p>';
 		}
 
+		$ui = $this->chat_ui( $agent_id, $agent_post );
+
 		wp_enqueue_style( 'arwp-chat-css' );
+
+		if ( ! arwp_visitor_can_use_agent( $agent_id ) ) {
+			return $this->render_unavailable( $agent_id, $ui );
+		}
+
 		wp_enqueue_script( 'arwp-marked-js' );
 		wp_enqueue_script( 'arwp-chat-js' );
 
@@ -114,66 +121,20 @@ class ARWP_Shortcode {
 
 		$cooldown = arwp_meta_int( get_post_meta( $agent_id, '_arwp_cooldown', true ), arwp_default_cooldown() );
 
-		$ui_theme       = get_post_meta( $agent_id, '_arwp_ui_theme', true );
-		$ui_title       = get_post_meta( $agent_id, '_arwp_ui_title', true );
-		$ui_greeting    = get_post_meta( $agent_id, '_arwp_ui_greeting', true );
-		$ui_placeholder = get_post_meta( $agent_id, '_arwp_ui_placeholder', true );
-		$primary_color  = get_post_meta( $agent_id, '_arwp_ui_primary_color', true );
-
-		if ( ! in_array( $ui_theme, array( 'light', 'dark' ), true ) ) {
-			$ui_theme = 'dark';
-		}
-		if ( empty( $ui_title ) ) {
-			$ui_title = $agent_post->post_title;
-		}
-		if ( empty( $ui_placeholder ) ) {
-			$ui_placeholder = __( 'Type your message here...', 'arwp-agents' );
-		}
-		$primary_color = sanitize_hex_color( $primary_color );
-		if ( empty( $primary_color ) ) {
-			$primary_color = '#3b82f6';
-		}
 		ob_start();
 		?>
-		<div class="arwp-chat-wrapper arwp-theme-<?php echo esc_attr( $ui_theme ); ?>" 
-			id="arwp-chat-<?php echo esc_attr( $agent_id ); ?>" 
-			data-agent-id="<?php echo esc_attr( $agent_id ); ?>" 
+		<div class="arwp-chat-wrapper arwp-theme-<?php echo esc_attr( $ui['theme'] ); ?>"
+			id="arwp-chat-<?php echo esc_attr( $agent_id ); ?>"
+			data-agent-id="<?php echo esc_attr( $agent_id ); ?>"
 			data-cooldown="<?php echo esc_attr( $cooldown ); ?>"
-			data-greeting="<?php echo esc_attr( $ui_greeting ); ?>"
-			style="--arwp-primary-color: <?php echo esc_attr( $primary_color ); ?>;">
+			data-greeting="<?php echo esc_attr( $ui['greeting'] ); ?>"
+			data-suggestions="<?php echo esc_attr( wp_json_encode( $ui['suggestions'] ) ); ?>"
+			style="--arwp-primary-color: <?php echo esc_attr( $ui['color'] ); ?>;">
 
 			<div class="arwp-chat-main">
-				<div class="arwp-chat-header">
-					<div class="arwp-chat-agent-info">
-						<div class="arwp-chat-agent-avatar">
-							<?php if ( has_post_thumbnail( $agent_id ) ) : ?>
-								<img src="<?php echo esc_url( get_the_post_thumbnail_url( $agent_id, 'thumbnail' ) ); ?>" alt="<?php echo esc_attr( $ui_title ); ?>" />
-							<?php else : ?>
-								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
-									<circle cx="12" cy="8" r="4"></circle>
-									<path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"></path>
-								</svg>
-							<?php endif; ?>
-						</div>
-						<h3 class="arwp-chat-agent-name"><?php echo esc_html( $ui_title ); ?></h3>
-					</div>
-					<button type="button" class="arwp-fullscreen-btn" aria-expanded="false" aria-label="<?php esc_attr_e( 'Enter fullscreen', 'arwp-agents' ); ?>">
-						<svg class="arwp-icon-expand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-							<polyline points="15 3 21 3 21 9"></polyline>
-							<polyline points="9 21 3 21 3 15"></polyline>
-							<line x1="21" y1="3" x2="14" y2="10"></line>
-							<line x1="3" y1="21" x2="10" y2="14"></line>
-						</svg>
-						<svg class="arwp-icon-collapse" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-							<polyline points="4 14 10 14 10 20"></polyline>
-							<polyline points="20 10 14 10 14 4"></polyline>
-							<line x1="10" y1="14" x2="3" y2="21"></line>
-							<line x1="14" y1="10" x2="21" y2="3"></line>
-						</svg>
-					</button>
-				</div>
+				<?php $this->render_chat_header( $agent_id, $ui ); ?>
 
-			<div class="arwp-chat-column">
+				<div class="arwp-chat-column">
 			<div class="arwp-chat-body">
 				<div class="arwp-chat-messages-container"
 					id="arwp-messages-<?php echo esc_attr( $agent_id ); ?>"
@@ -200,11 +161,11 @@ class ARWP_Shortcode {
 			<div class="arwp-chat-footer">
 				<form class="arwp-chat-form" id="arwp-form-<?php echo esc_attr( $agent_id ); ?>">
 					<div class="arwp-chat-input-wrapper">
-						<label class="screen-reader-text" for="arwp-input-<?php echo esc_attr( $agent_id ); ?>"><?php echo esc_html( $ui_placeholder ); ?></label>
+						<label class="screen-reader-text" for="arwp-input-<?php echo esc_attr( $agent_id ); ?>"><?php echo esc_html( $ui['placeholder'] ); ?></label>
 						<textarea class="arwp-chat-input"
 							id="arwp-input-<?php echo esc_attr( $agent_id ); ?>"
-							placeholder="<?php echo esc_attr( $ui_placeholder ); ?>"
-							aria-label="<?php echo esc_attr( $ui_placeholder ); ?>"
+							placeholder="<?php echo esc_attr( $ui['placeholder'] ); ?>"
+							aria-label="<?php echo esc_attr( $ui['placeholder'] ); ?>"
 							rows="1"></textarea>
 						<button type="submit" class="arwp-chat-submit-btn" id="arwp-submit-<?php echo esc_attr( $agent_id ); ?>" aria-label="<?php esc_attr_e( 'Send message', 'arwp-agents' ); ?>" disabled>
 							<svg class="arwp-icon-send" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -218,10 +179,155 @@ class ARWP_Shortcode {
 					</div>
 				</form>
 				<div class="arwp-chat-error-message" id="arwp-error-<?php echo esc_attr( $agent_id ); ?>"></div>
+				<?php if ( '' !== $ui['disclaimer'] ) : ?>
+					<p class="arwp-chat-disclaimer"><?php echo esc_html( $ui['disclaimer'] ); ?></p>
+				<?php endif; ?>
 			</div>
 			</div>
 			</div>
 
+		</div>
+		<?php
+		return ob_get_clean();
+	}
+
+	/**
+	 * Shared chat appearance values.
+	 *
+	 * @param int     $agent_id   Agent post ID.
+	 * @param WP_Post $agent_post Agent post.
+	 * @return array
+	 */
+	private function chat_ui( $agent_id, $agent_post ) {
+		$theme       = get_post_meta( $agent_id, '_arwp_ui_theme', true );
+		$title       = get_post_meta( $agent_id, '_arwp_ui_title', true );
+		$greeting    = get_post_meta( $agent_id, '_arwp_ui_greeting', true );
+		$placeholder = get_post_meta( $agent_id, '_arwp_ui_placeholder', true );
+		$color       = sanitize_hex_color( get_post_meta( $agent_id, '_arwp_ui_primary_color', true ) );
+		$description = get_post_meta( $agent_id, '_arwp_ui_description', true );
+		$disclaimer  = get_post_meta( $agent_id, '_arwp_ui_disclaimer', true );
+		$suggestions = get_post_meta( $agent_id, '_arwp_ui_suggestions', true );
+		$logo_id     = absint( get_post_meta( $agent_id, '_arwp_ui_logo_id', true ) );
+		$logo_url    = $logo_id ? wp_get_attachment_image_url( $logo_id, 'medium' ) : '';
+
+		if ( ! in_array( $theme, array( 'light', 'dark' ), true ) ) {
+			$theme = 'dark';
+		}
+		if ( ! is_string( $title ) || '' === $title ) {
+			$title = $agent_post->post_title;
+		}
+		if ( ! is_string( $greeting ) ) {
+			$greeting = '';
+		}
+		if ( ! is_string( $placeholder ) || '' === $placeholder ) {
+			$placeholder = __( 'Type your message here...', 'arwp-agents' );
+		}
+		if ( empty( $color ) ) {
+			$color = '#3b82f6';
+		}
+		if ( ! is_string( $description ) ) {
+			$description = '';
+		}
+		if ( ! is_string( $disclaimer ) ) {
+			$disclaimer = '';
+		}
+		if ( ! is_string( $logo_url ) ) {
+			$logo_url = '';
+		}
+		if ( ! is_array( $suggestions ) ) {
+			$suggestions = array();
+		}
+
+		return array(
+			'theme'       => $theme,
+			'title'       => $title,
+			'greeting'    => $greeting,
+			'placeholder' => $placeholder,
+			'color'       => $color,
+			'description' => $description,
+			'disclaimer'  => $disclaimer,
+			'logo_url'    => $logo_url,
+			'suggestions' => array_values( array_filter( $suggestions, 'is_string' ) ),
+		);
+	}
+
+	/**
+	 * Header shared by the open chat and the denied state.
+	 *
+	 * @param int   $agent_id Agent post ID.
+	 * @param array $ui       Appearance values from chat_ui().
+	 */
+	private function render_chat_header( $agent_id, $ui ) {
+		?>
+		<div class="arwp-chat-header">
+			<div class="arwp-chat-agent-info">
+				<?php if ( '' !== $ui['logo_url'] ) : ?>
+					<img class="arwp-chat-logo" src="<?php echo esc_url( $ui['logo_url'] ); ?>" alt="<?php echo esc_attr( $ui['title'] ); ?>" />
+				<?php endif; ?>
+				<div class="arwp-chat-agent-avatar">
+					<?php if ( has_post_thumbnail( $agent_id ) ) : ?>
+						<img src="<?php echo esc_url( get_the_post_thumbnail_url( $agent_id, 'thumbnail' ) ); ?>" alt="<?php echo esc_attr( $ui['title'] ); ?>" />
+					<?php else : ?>
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+							<circle cx="12" cy="8" r="4"></circle>
+							<path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"></path>
+						</svg>
+					<?php endif; ?>
+				</div>
+				<div class="arwp-chat-agent-text">
+					<h3 class="arwp-chat-agent-name"><?php echo esc_html( $ui['title'] ); ?></h3>
+					<?php if ( '' !== $ui['description'] ) : ?>
+						<p class="arwp-chat-description"><?php echo esc_html( $ui['description'] ); ?></p>
+					<?php endif; ?>
+				</div>
+			</div>
+			<button type="button" class="arwp-fullscreen-btn" aria-expanded="false" aria-label="<?php esc_attr_e( 'Enter fullscreen', 'arwp-agents' ); ?>">
+						<svg class="arwp-icon-expand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+							<polyline points="15 3 21 3 21 9"></polyline>
+							<polyline points="9 21 3 21 3 15"></polyline>
+							<line x1="21" y1="3" x2="14" y2="10"></line>
+							<line x1="3" y1="21" x2="10" y2="14"></line>
+						</svg>
+						<svg class="arwp-icon-collapse" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+							<polyline points="4 14 10 14 10 20"></polyline>
+							<polyline points="20 10 14 10 14 4"></polyline>
+							<line x1="10" y1="14" x2="3" y2="21"></line>
+							<line x1="14" y1="10" x2="21" y2="3"></line>
+						</svg>
+					</button>
+		</div>
+		<?php
+	}
+
+	/**
+	 * Chat shell without a form when this visitor cannot send messages.
+	 *
+	 * @param int   $agent_id Agent post ID.
+	 * @param array $ui       Appearance values from chat_ui().
+	 * @return string
+	 */
+	private function render_unavailable( $agent_id, $ui ) {
+		$state = arwp_agent_access_state( $agent_id );
+		ob_start();
+		?>
+		<div class="arwp-chat-wrapper arwp-theme-<?php echo esc_attr( $ui['theme'] ); ?>"
+			id="arwp-chat-<?php echo esc_attr( $agent_id ); ?>"
+			data-agent-id="<?php echo esc_attr( $agent_id ); ?>"
+			style="--arwp-primary-color: <?php echo esc_attr( $ui['color'] ); ?>;">
+			<div class="arwp-chat-main">
+				<?php $this->render_chat_header( $agent_id, $ui ); ?>
+				<p class="arwp-chat-unavailable-note">
+					<?php if ( 'login' === $state ) : ?>
+						<?php
+						$login_url = is_singular() ? wp_login_url( get_permalink() ) : wp_login_url();
+						esc_html_e( 'Log in to use this chat.', 'arwp-agents' );
+						?>
+						<a href="<?php echo esc_url( $login_url ); ?>"><?php esc_html_e( 'Log in', 'arwp-agents' ); ?></a>
+					<?php else : ?>
+						<?php esc_html_e( 'You don\'t have access to this chat.', 'arwp-agents' ); ?>
+					<?php endif; ?>
+				</p>
+			</div>
 		</div>
 		<?php
 		return ob_get_clean();

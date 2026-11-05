@@ -45,6 +45,7 @@ class ARWP_Settings {
 				'testing'              => __( 'Testing connection...', 'arwp-agents' ),
 				'request_failed'       => __( 'Request failed.', 'arwp-agents' ),
 				'select_default_model' => __( '— Select Default Model —', 'arwp-agents' ),
+				'has_constant'         => self::has_constant_api_key(),
 			)
 		);
 		wp_add_inline_script( 'arwp-select2-js', $this->settings_script() );
@@ -77,7 +78,7 @@ jQuery(function($) {
 		var modelSelect = $('#arwp_openrouter_default_model');
 		var currentModel = modelSelect.val();
 
-		if (!apiKey) {
+		if (!apiKey && !arwp_settings.has_constant) {
 			window.alert(arwp_settings.enter_api_key);
 			return;
 		}
@@ -161,6 +162,16 @@ JS;
 			)
 		);
 
+		register_setting(
+			'arwp_settings_group',
+			'arwp_chats_show_details',
+			array(
+				'type'              => 'string',
+				'sanitize_callback' => array( $this, 'sanitize_chats_show_details' ),
+				'default'           => '0',
+			)
+		);
+
 		add_settings_section(
 			'arwp_api_settings_section',
 			__( 'OpenRouter API Integration', 'arwp-agents' ),
@@ -183,6 +194,21 @@ JS;
 			'arwp-settings',
 			'arwp_api_settings_section'
 		);
+
+		add_settings_section(
+			'arwp_chats_section',
+			__( 'Chats', 'arwp-agents' ),
+			array( $this, 'render_chats_section_info' ),
+			'arwp-settings'
+		);
+
+		add_settings_field(
+			'arwp_chats_show_details',
+			__( 'Privacy', 'arwp-agents' ),
+			array( $this, 'render_chats_show_details_field' ),
+			'arwp-settings',
+			'arwp_chats_section'
+		);
 	}
 
 	/**
@@ -192,12 +218,154 @@ JS;
 	 * @return string
 	 */
 	public function sanitize_api_key( $value ) {
-		$sanitized = sanitize_text_field( trim( $value ) );
-		// If the API key is changed via the settings form, reset the connection status.
-		if ( get_option( 'arwp_openrouter_api_key' ) !== $sanitized ) {
+		// A disabled field is omitted from the settings form, which would otherwise
+		// save an empty key over the stored one. The constant is never written here.
+		if ( self::has_constant_api_key() ) {
+			$stored = get_option( 'arwp_openrouter_api_key', '' );
+			return is_string( $stored ) ? $stored : '';
+		}
+
+		$sanitized = sanitize_text_field( trim( (string) $value ) );
+
+		// Already ciphertext, for example a legacy plaintext key being migrated.
+		if ( 0 === strpos( $sanitized, 'enc:' ) ) {
+			$existing = self::decrypt_api_key( $sanitized );
+			if ( '' !== $existing ) {
+				return $sanitized;
+			}
+		}
+
+		// Compare with the saved option, not a wp-config constant.
+		if ( self::get_stored_api_key() !== $sanitized ) {
 			update_option( 'arwp_api_status', 'untested' );
 		}
-		return $sanitized;
+
+		return self::encrypt_api_key( $sanitized );
+	}
+
+	/**
+	 * Keep the Chats privacy option to a yes/no string.
+	 *
+	 * @param mixed $value Submitted value.
+	 * @return string
+	 */
+	public function sanitize_chats_show_details( $value ) {
+		return ( '1' === (string) $value ) ? '1' : '0';
+	}
+
+	/**
+	 * Whether wp-config.php defines a non-empty OpenRouter key.
+	 *
+	 * @return bool
+	 */
+	public static function has_constant_api_key() {
+		return defined( 'ARWP_OPENROUTER_API_KEY' ) && is_string( ARWP_OPENROUTER_API_KEY ) && '' !== ARWP_OPENROUTER_API_KEY;
+	}
+
+	/**
+	 * Key used for OpenRouter requests.
+	 *
+	 * A wp-config constant wins. Otherwise the option is decrypted, and a
+	 * legacy plaintext value is rewritten as ciphertext.
+	 *
+	 * @return string
+	 */
+	public static function get_api_key() {
+		if ( self::has_constant_api_key() ) {
+			return ARWP_OPENROUTER_API_KEY;
+		}
+
+		return self::get_stored_api_key();
+	}
+
+	/**
+	 * Decrypted key from the option, ignoring the wp-config constant.
+	 *
+	 * @return string
+	 */
+	public static function get_stored_api_key() {
+		$stored = get_option( 'arwp_openrouter_api_key', '' );
+		if ( ! is_string( $stored ) || '' === $stored ) {
+			return '';
+		}
+
+		if ( 0 === strpos( $stored, 'enc:' ) ) {
+			return self::decrypt_api_key( $stored );
+		}
+
+		$encrypted = self::encrypt_api_key( $stored );
+		if ( 0 === strpos( $encrypted, 'enc:' ) ) {
+			update_option( 'arwp_openrouter_api_key', $encrypted );
+		}
+
+		return $stored;
+	}
+
+	/**
+	 * The option holds ciphertext that cannot be decrypted.
+	 *
+	 * @return bool
+	 */
+	public static function stored_key_unreadable() {
+		$stored = get_option( 'arwp_openrouter_api_key', '' );
+		if ( ! is_string( $stored ) || '' === $stored || 0 !== strpos( $stored, 'enc:' ) ) {
+			return false;
+		}
+
+		return '' === self::decrypt_api_key( $stored );
+	}
+
+	/**
+	 * Encrypt a key for storage. Returns plaintext when OpenSSL is unavailable.
+	 *
+	 * @param string $plain API key.
+	 * @return string
+	 */
+	public static function encrypt_api_key( $plain ) {
+		$plain = (string) $plain;
+		if ( '' === $plain || ! function_exists( 'openssl_encrypt' ) ) {
+			return $plain;
+		}
+
+		$key = hash( 'sha256', wp_salt( 'auth' ), true );
+		try {
+			$iv = random_bytes( 12 );
+		} catch ( Exception $e ) {
+			return $plain;
+		}
+
+		$tag    = '';
+		$cipher = openssl_encrypt( $plain, 'aes-256-gcm', $key, OPENSSL_RAW_DATA, $iv, $tag );
+		if ( false === $cipher || ! is_string( $tag ) || 16 !== strlen( $tag ) ) {
+			return $plain;
+		}
+
+		return 'enc:' . base64_encode( $iv . $tag . $cipher ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_encode -- Stores ciphertext, not obfuscated code.
+	}
+
+	/**
+	 * Decrypt a value produced by encrypt_api_key().
+	 *
+	 * @param string $stored Stored option value.
+	 * @return string Plaintext, or empty when it cannot be read.
+	 */
+	public static function decrypt_api_key( $stored ) {
+		if ( ! is_string( $stored ) || 0 !== strpos( $stored, 'enc:' ) || ! function_exists( 'openssl_decrypt' ) ) {
+			return '';
+		}
+
+		$raw = base64_decode( substr( $stored, 4 ), true ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_decode -- Reads ciphertext stored by this plugin.
+		if ( false === $raw || strlen( $raw ) < 29 ) {
+			return '';
+		}
+
+		$iv     = substr( $raw, 0, 12 );
+		$tag    = substr( $raw, 12, 16 );
+		$cipher = substr( $raw, 28 );
+		$key    = hash( 'sha256', wp_salt( 'auth' ), true );
+		$plain  = openssl_decrypt( $cipher, 'aes-256-gcm', $key, OPENSSL_RAW_DATA, $iv, $tag );
+
+		return is_string( $plain ) ? $plain : '';
 	}
 
 	/**
@@ -300,7 +468,7 @@ JS;
 		}
 
 		if ( empty( $api_key ) ) {
-			$api_key = get_option( 'arwp_openrouter_api_key', '' );
+			$api_key = self::get_api_key();
 		}
 
 		if ( empty( $api_key ) ) {
@@ -328,12 +496,13 @@ JS;
 	 * Render API Key field in settings.
 	 */
 	public function render_api_key_field() {
-		$api_key      = get_option( 'arwp_openrouter_api_key', '' );
-		$status       = get_option( 'arwp_api_status', 'untested' );
-		$is_connected = ( 'connected' === $status && ! empty( $api_key ) );
+		$uses_constant = self::has_constant_api_key();
+		$api_key       = $uses_constant ? '' : self::get_stored_api_key();
+		$status        = get_option( 'arwp_api_status', 'untested' );
+		$is_connected  = ( 'connected' === $status && ( $uses_constant || '' !== $api_key ) );
 		?>
 		<div style="display:flex; align-items:center; gap:10px;">
-			<input type="password" name="arwp_openrouter_api_key" id="arwp_openrouter_api_key" value="<?php echo esc_attr( $api_key ); ?>" class="regular-text" style="width: 400px;" />
+			<input type="password" name="arwp_openrouter_api_key" id="arwp_openrouter_api_key" value="<?php echo esc_attr( $api_key ); ?>" class="regular-text" style="width: 400px;" <?php disabled( $uses_constant ); ?> />
 			
 			<button type="button" class="button button-secondary" id="arwp_test_connection_btn" style="display: <?php echo $is_connected ? 'none' : 'inline-block'; ?>;">
 				<?php esc_html_e( 'Test Connection', 'arwp-agents' ); ?>
@@ -346,7 +515,36 @@ JS;
 			
 			<span class="spinner" id="arwp_test_spinner" style="float:none; margin:0;"></span>
 		</div>
-		<p class="description" id="arwp_test_message"><?php esc_html_e( 'Securely stores your OpenRouter API Key.', 'arwp-agents' ); ?></p>
+		<p class="description" id="arwp_test_message">
+			<?php
+			if ( $uses_constant ) {
+				esc_html_e( 'The key is set by ARWP_OPENROUTER_API_KEY in wp-config.php.', 'arwp-agents' );
+			} else {
+				esc_html_e( 'Securely stores your OpenRouter API Key. Changing WordPress salts makes a saved key unreadable, and the key has to be entered again. A constant in wp-config.php is unaffected.', 'arwp-agents' );
+			}
+			?>
+		</p>
+		<?php
+	}
+
+	/**
+	 * Chats section has no extra introduction.
+	 */
+	public function render_chats_section_info() {
+	}
+
+	/**
+	 * Checkbox for showing names and contact details on the Chats screen.
+	 */
+	public function render_chats_show_details_field() {
+		$value = (string) get_option( 'arwp_chats_show_details', '0' );
+		?>
+		<input type="hidden" name="arwp_chats_show_details" value="0" />
+		<label for="arwp_chats_show_details">
+			<input type="checkbox" name="arwp_chats_show_details" id="arwp_chats_show_details" value="1" <?php checked( '1', $value ); ?> />
+			<?php esc_html_e( 'Show names and contact details in Chats', 'arwp-agents' ); ?>
+		</label>
+		<p class="description"><?php esc_html_e( 'When unchecked, Chats hides account names and replaces emails, phone numbers, and IP addresses in titles and messages.', 'arwp-agents' ); ?></p>
 		<?php
 	}
 
@@ -377,6 +575,9 @@ JS;
 		?>
 		<div class="wrap">
 			<h1><?php echo esc_html( get_admin_page_title() ); ?></h1>
+			<?php if ( ! self::has_constant_api_key() && self::stored_key_unreadable() ) : ?>
+				<div class="notice notice-error"><p><?php esc_html_e( 'The saved key could not be read. Enter it again.', 'arwp-agents' ); ?></p></div>
+			<?php endif; ?>
 			<p class="arwp-admin-help"><?php esc_html_e( 'Connect your OpenRouter API key so agents can generate replies.', 'arwp-agents' ); ?></p>
 			<form action="options.php" method="post">
 				<?php
@@ -399,7 +600,11 @@ JS;
 			wp_send_json_error( __( 'Unauthorized', 'arwp-agents' ) );
 		}
 
-		$api_key = isset( $_POST['api_key'] ) ? sanitize_text_field( wp_unslash( $_POST['api_key'] ) ) : '';
+		if ( self::has_constant_api_key() ) {
+			$api_key = self::get_api_key();
+		} else {
+			$api_key = isset( $_POST['api_key'] ) ? sanitize_text_field( wp_unslash( $_POST['api_key'] ) ) : '';
+		}
 
 		if ( empty( $api_key ) ) {
 			wp_send_json_error( __( 'Please enter an API Key first.', 'arwp-agents' ) );
@@ -410,7 +615,9 @@ JS;
 			wp_send_json_error( $models->get_error_message() );
 		}
 
-		update_option( 'arwp_openrouter_api_key', $api_key );
+		if ( ! self::has_constant_api_key() ) {
+			update_option( 'arwp_openrouter_api_key', $api_key );
+		}
 		update_option( 'arwp_api_status', 'connected' );
 		set_transient( 'arwp_openrouter_models', $models, WEEK_IN_SECONDS );
 

@@ -3,7 +3,7 @@
  * Plugin Name:       ARWP Agents
  * Plugin URI:        https://wordpress.org/plugins/arwp-agents/
  * Description:       Self-hosted AI chat agents for WordPress, using your own OpenRouter API key.
- * Version:           1.5.0
+ * Version:           1.6.0
  * Requires at least: 6.2
  * Requires PHP:      7.4
  * Author:            ARWP
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // Define plugin constants.
-define( 'ARWP_VERSION', '1.5.0' );
+define( 'ARWP_VERSION', '1.6.0' );
 define( 'ARWP_PATH', plugin_dir_path( __FILE__ ) );
 define( 'ARWP_URL', plugin_dir_url( __FILE__ ) );
 define( 'ARWP_BASENAME', plugin_basename( __FILE__ ) );
@@ -96,6 +96,204 @@ function arwp_meta_int( $raw, $fallback ) {
 	}
 
 	return max( 0, (int) $raw );
+}
+
+/**
+ * Who may open this agent: ok, login, or denied.
+ *
+ * People who can edit the agent can always open it. Missing or unknown
+ * access meta stays public, which is how agents worked before this setting.
+ *
+ * @param int $agent_id Agent post ID.
+ * @return string ok|login|denied
+ */
+function arwp_agent_access_state( $agent_id ) {
+	$agent_id = (int) $agent_id;
+
+	if ( current_user_can( 'edit_post', $agent_id ) ) {
+		return 'ok';
+	}
+
+	$access = get_post_meta( $agent_id, '_arwp_access', true );
+	if ( ! in_array( $access, array( 'public', 'logged_in', 'roles' ), true ) ) {
+		$access = 'public';
+	}
+
+	if ( 'public' === $access ) {
+		return 'ok';
+	}
+
+	if ( ! is_user_logged_in() ) {
+		return 'login';
+	}
+
+	if ( 'logged_in' === $access ) {
+		return 'ok';
+	}
+
+	$allowed = get_post_meta( $agent_id, '_arwp_access_roles', true );
+	if ( ! is_array( $allowed ) ) {
+		$allowed = array();
+	}
+
+	$user = wp_get_current_user();
+	if ( array_intersect( $allowed, (array) $user->roles ) ) {
+		return 'ok';
+	}
+
+	return 'denied';
+}
+
+/**
+ * Whether the current visitor may use this agent.
+ *
+ * @param int $agent_id Agent post ID.
+ * @return bool
+ */
+function arwp_visitor_can_use_agent( $agent_id ) {
+	$can = ( 'ok' === arwp_agent_access_state( $agent_id ) );
+
+	return (bool) apply_filters( 'arwp_visitor_can_use_agent', $can, $agent_id );
+}
+
+/**
+ * Whether a stored pattern is safe to keep and run.
+ *
+ * @param string $pattern Pattern without delimiters.
+ * @return bool
+ */
+function arwp_pattern_is_safe( $pattern ) {
+	if ( ! is_string( $pattern ) ) {
+		return false;
+	}
+
+	$length = function_exists( 'mb_strlen' ) ? mb_strlen( $pattern ) : strlen( $pattern );
+	if ( $length < 1 || $length > 80 ) {
+		return false;
+	}
+
+	if ( false !== strpos( $pattern, '~' ) || false !== strpos( $pattern, "\0" ) ) {
+		return false;
+	}
+
+	// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- Invalid patterns must be rejected, not thrown.
+	return false !== @preg_match( '~' . $pattern . '~iu', '' );
+}
+
+/**
+ * Match one stored pattern against a visitor message.
+ *
+ * Backtracking and recursion are capped so a pattern cannot stall PHP.
+ * A pattern that hits the cap does not match.
+ *
+ * @param string $pattern Pattern without delimiters.
+ * @param string $subject Visitor message.
+ * @return bool
+ */
+function arwp_pattern_matches( $pattern, $subject ) {
+	if ( ! arwp_pattern_is_safe( $pattern ) ) {
+		return false;
+	}
+
+	$backtrack = ini_get( 'pcre.backtrack_limit' );
+	$recursion = ini_get( 'pcre.recursion_limit' );
+	// phpcs:disable WordPress.PHP.IniSet.Risky, Squiz.PHP.DiscouragedFunctions.Discouraged -- The cap is restored before this function returns.
+	ini_set( 'pcre.backtrack_limit', '20000' );
+	ini_set( 'pcre.recursion_limit', '10000' );
+	// phpcs:enable WordPress.PHP.IniSet.Risky, Squiz.PHP.DiscouragedFunctions.Discouraged
+
+	// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- A pattern that overruns the cap returns false.
+	$matched = @preg_match( '~' . $pattern . '~iu', (string) $subject );
+
+	// phpcs:disable WordPress.PHP.IniSet.Risky, Squiz.PHP.DiscouragedFunctions.Discouraged -- Restores the limits captured above.
+	if ( false !== $backtrack ) {
+		ini_set( 'pcre.backtrack_limit', (string) $backtrack );
+	}
+	if ( false !== $recursion ) {
+		ini_set( 'pcre.recursion_limit', (string) $recursion );
+	}
+	// phpcs:enable WordPress.PHP.IniSet.Risky, Squiz.PHP.DiscouragedFunctions.Discouraged
+
+	return 1 === $matched;
+}
+
+/**
+ * Whether this visitor message matches a phrase or pattern on the agent.
+ *
+ * @param int    $agent_id Agent post ID.
+ * @param string $message  Visitor message.
+ * @return bool
+ */
+function arwp_message_is_blocked( $agent_id, $message ) {
+	$message = (string) $message;
+	$phrases = get_post_meta( $agent_id, '_arwp_blocked_phrases', true );
+	if ( ! is_array( $phrases ) ) {
+		$phrases = array();
+	}
+
+	foreach ( $phrases as $phrase ) {
+		if ( ! is_string( $phrase ) || '' === $phrase ) {
+			continue;
+		}
+
+		$found = function_exists( 'mb_stripos' ) ? mb_stripos( $message, $phrase ) : stripos( $message, $phrase );
+		if ( false !== $found ) {
+			return true;
+		}
+	}
+
+	$patterns = get_post_meta( $agent_id, '_arwp_blocked_patterns', true );
+	if ( ! is_array( $patterns ) ) {
+		$patterns = array();
+	}
+
+	foreach ( $patterns as $pattern ) {
+		if ( ! is_string( $pattern ) || '' === $pattern ) {
+			continue;
+		}
+
+		if ( arwp_pattern_matches( $pattern, $message ) ) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+/**
+ * Hide emails, phone numbers, and IP addresses when Chats details are off.
+ *
+ * Display only. Callers must not write the result back to the database.
+ *
+ * @param string $text Original text.
+ * @return string
+ */
+function arwp_redact_personal_details( $text ) {
+	if ( ! is_string( $text ) ) {
+		return '';
+	}
+
+	if ( '1' === (string) get_option( 'arwp_chats_show_details', '0' ) ) {
+		return $text;
+	}
+
+	$hidden = '[hidden]';
+	$text   = preg_replace( '/[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}/', $hidden, $text );
+	if ( ! is_string( $text ) ) {
+		return '';
+	}
+
+	$text = preg_replace( '/\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b/', $hidden, $text );
+	if ( ! is_string( $text ) ) {
+		return '';
+	}
+
+	$text = preg_replace( '/(?<!\w)\+?\d(?:[\s().\-]*\d){9,}(?!\w)/', $hidden, $text );
+	if ( ! is_string( $text ) ) {
+		return '';
+	}
+
+	return $text;
 }
 
 /**
