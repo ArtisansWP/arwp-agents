@@ -1,0 +1,575 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: ARWP Agents 1.5.0\n"
+"Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/arwp-agents/\n"
+"POT-Creation-Date: 2026-10-31 00:00+0000\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: \n"
+"X-Domain: arwp-agents\n"
+
+#: includes/class-arwp-conversations.php
+msgid "%d conversation"
+msgstr ""
+
+#: includes/class-arwp-conversations.php
+msgid "%d tokens"
+msgstr ""
+
+#: includes/class-arwp-settings.php
+msgid "&mdash; Select Default Model &mdash;"
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "(Copy)"
+msgstr ""
+
+#: includes/class-arwp-conversations.php
+msgid "Actions"
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "Add Agent"
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "Add New Agent"
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "Add to a page"
+msgstr ""
+
+#: includes/class-arwp-conversations.php, includes/class-arwp-cpt.php
+msgid "Agent"
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "Agent & Model"
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "Agent Archives"
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "Agent Attributes"
+msgstr ""
+
+#: includes/class-arwp-api.php
+msgid "Agent ID and Session Token are required."
+msgstr ""
+
+#: includes/class-arwp-api.php
+msgid "Agent ID is required."
+msgstr ""
+
+#: includes/class-arwp-api.php
+msgid "Agent not found."
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "Agents"
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "Agents list"
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "Agents list navigation"
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "Chat agents for this site."
+msgstr ""
+
+#: includes/class-arwp-conversations.php
+msgid "All Agents"
+msgstr ""
+
+#: includes/class-arwp-conversations.php
+msgid "All chats"
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "All Models"
+msgstr ""
+
+#: includes/class-arwp-api.php
+msgid "An error occurred during API communication."
+msgstr ""
+
+#: includes/class-arwp-api.php
+msgid "API request failed: %s"
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "Chat Appearance"
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "Chat Avatar"
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "Chat Title"
+msgstr ""
+
+#: includes/class-arwp-conversations.php
+msgid "Chats"
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "Click to copy"
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "Clone"
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "Clone this Agent"
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "Connect your OpenRouter API key before chatting. %s"
+msgstr ""
+
+#: includes/class-arwp-settings.php
+msgid "Connect your OpenRouter API key so agents can generate replies."
+msgstr ""
+
+#: includes/class-arwp-settings.php
+msgid "Connected"
+msgstr ""
+
+#: includes/class-arwp-settings.php
+msgid "Connection failed. Please check your API key."
+msgstr ""
+
+#: includes/class-arwp-settings.php
+msgid "Connection successful! API Key saved."
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "Controls creativity (0.0 is deterministic, 2.0 is highly creative). Recommended range: 0.2 - 1.0."
+msgstr ""
+
+#: includes/class-arwp-shortcode.php
+msgid "Conversation"
+msgstr ""
+
+#: includes/class-arwp-conversations.php
+msgid "Conversation not found."
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "Cooldown Period (Seconds)"
+msgstr ""
+
+#: includes/class-arwp-shortcode.php
+msgid "Copied"
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "Copied to clipboard!"
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "Copied!"
+msgstr ""
+
+#: includes/class-arwp-shortcode.php
+msgid "Copy"
+msgstr ""
+
+#: includes/class-arwp-shortcode.php
+msgid "Copy failed"
+msgstr ""
+
+#: includes/class-arwp-conversations.php
+msgid "Created"
+msgstr ""
+
+#: includes/class-arwp-api.php
+msgid "Cross-origin requests are not allowed."
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "Dark Mode"
+msgstr ""
+
+#: includes/class-arwp-settings.php
+msgid "Default Model"
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "Define the behavior, identity, and rules for this specific agent."
+msgstr ""
+
+#: includes/class-arwp-conversations.php
+msgid "Delete"
+msgstr ""
+
+#: includes/class-arwp-conversations.php
+msgid "Delete this conversation and all of its messages?"
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "Edit Agent"
+msgstr ""
+
+#: includes/class-arwp-shortcode.php
+msgid "Error: That agent could not be found."
+msgstr ""
+
+#: includes/class-arwp-shortcode.php
+msgid "Error: Agent ID is missing in the shortcode."
+msgstr ""
+
+#: includes/class-arwp-conversations.php
+msgid "Every conversation visitors have with your agents."
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "Failed to clone the agent."
+msgstr ""
+
+#: includes/class-arwp-conversations.php
+msgid "Filter"
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "Filter agents list"
+msgstr ""
+
+#: includes/class-arwp-conversations.php
+msgid "Filter by agent"
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "Global Default"
+msgstr ""
+
+#: includes/class-arwp-conversations.php
+msgid "Guest"
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "History Context Limit"
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "Initial Greeting Message"
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "Input Placeholder Text"
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "Insert into agent"
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "Invalid agent."
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "Light Mode"
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "Max Tokens"
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "Maximum number of tokens to generate in the agent completion."
+msgstr ""
+
+#: includes/class-arwp-api.php
+msgid "Message content cannot be empty."
+msgstr ""
+
+#: includes/class-arwp-conversations.php
+msgid "Messages"
+msgstr ""
+
+#: includes/class-arwp-api.php
+msgid "Messages are limited to %d characters."
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "Minimum time in seconds required between user messages to prevent spam or API abuse (0 for no cooldown)."
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "Missing required parameters."
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "Model"
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "Name the agent, choose a model, then copy the shortcode from the sidebar to put the chat on a page."
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "New Agent"
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "New AI Agent"
+msgstr ""
+
+#: includes/class-arwp-api.php
+msgid "New Chat"
+msgstr ""
+
+#: includes/class-arwp-conversations.php
+msgid "No conversations yet."
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "Not found"
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "Not found in Trash"
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "Number of previous messages to send as context. Leave empty to use the default of %d. Longer context costs more per reply."
+msgstr ""
+
+#: includes/class-arwp-shortcode.php
+msgid "Online"
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "Open Settings"
+msgstr ""
+
+#: includes/class-arwp-settings.php
+msgid "OpenRouter API Integration"
+msgstr ""
+
+#: includes/class-arwp-settings.php
+msgid "OpenRouter API Key"
+msgstr ""
+
+#: includes/class-arwp-api.php
+msgid "The OpenRouter API key has not been configured in the plugin settings."
+msgstr ""
+
+#: includes/class-arwp-api.php
+msgid "OpenRouter API returned error %1$d: %2$s"
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "OpenRouter Model"
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "Parent Agent:"
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "Paste this on any page or post to show the chat."
+msgstr ""
+
+#: includes/class-arwp-settings.php
+msgid "Please enter an API Key first."
+msgstr ""
+
+#: includes/class-arwp-settings.php
+msgid "Please enter your OpenRouter credentials to connect your agents. You can manage and retrieve API keys from your OpenRouter dashboard."
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "Please save or publish the agent first to generate a shortcode."
+msgstr ""
+
+#: includes/class-arwp-api.php
+msgid "Please wait %d seconds before sending another message."
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "Primary UI Color"
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "Publish Agent"
+msgstr ""
+
+#: includes/class-arwp-api.php
+msgid "Received an empty response from the AI model."
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "Remove chat avatar"
+msgstr ""
+
+#: includes/class-arwp-settings.php
+msgid "Request failed."
+msgstr ""
+
+#: includes/class-arwp-shortcode.php
+msgid "Scroll to latest message"
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "Search Agent"
+msgstr ""
+
+#: includes/class-arwp-settings.php
+msgid "Securely stores your OpenRouter API Key."
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "Security check failed."
+msgstr ""
+
+#: includes/class-arwp-api.php
+msgid "Security check failed. Invalid nonce."
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "Select the base color scheme for the chat."
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "Select which AI model this agent should use via OpenRouter."
+msgstr ""
+
+#: includes/class-arwp-shortcode.php
+msgid "Send message"
+msgstr ""
+
+#: includes/class-arwp-api.php
+msgid "Session not found."
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "Set chat avatar"
+msgstr ""
+
+#: includes/class-arwp-settings.php
+msgid "Settings"
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "Shortcode"
+msgstr ""
+
+#: includes/class-arwp-api.php
+msgid "Stream failed."
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "System Prompt"
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "Temperature"
+msgstr ""
+
+#: includes/class-arwp-settings.php
+msgid "Test Connection"
+msgstr ""
+
+#: includes/class-arwp-settings.php
+msgid "Testing connection..."
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "The first message sent by the agent automatically when the chat loads (for new conversations)."
+msgstr ""
+
+#: includes/class-arwp-shortcode.php
+msgid "This chat is not available."
+msgstr ""
+
+#: includes/class-arwp-settings.php
+msgid "This model will be used if an agent is set to \"Use Global Default Model\". Models are fetched and cached automatically."
+msgstr ""
+
+#: includes/class-arwp-conversations.php
+msgid "Title"
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "Title displayed in the chat header. Defaults to Agent Post Title if empty."
+msgstr ""
+
+#: includes/class-arwp-conversations.php
+msgid "Tokens"
+msgstr ""
+
+#: includes/class-arwp-shortcode.php
+msgid "Type your message here..."
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "UI Theme"
+msgstr ""
+
+#: includes/class-arwp-settings.php
+msgid "Unauthorized"
+msgstr ""
+
+#: includes/class-arwp-conversations.php
+msgid "Untitled"
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "Update Agent"
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "Uploaded to this agent"
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "Use as chat avatar"
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "Used for buttons and user message bubbles."
+msgstr ""
+
+#: includes/class-arwp-conversations.php
+msgid "User"
+msgstr ""
+
+#: includes/class-arwp-conversations.php
+msgid "View"
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "View Agent"
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "View Agents"
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "ARWP Agents"
+msgstr ""
+
+#: includes/class-arwp-cpt.php
+msgid "You do not have permission to clone agents."
+msgstr ""
+
+#: includes/class-arwp-conversations.php
+msgid "You do not have permission to delete conversations."
+msgstr ""
+
+#: includes/class-arwp-settings.php
+msgid "— Select Default Model —"
+msgstr ""
+
