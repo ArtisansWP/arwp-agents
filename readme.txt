@@ -8,59 +8,63 @@ Stable tag: 1.5.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Self-hosted AI chat agents for WordPress, using your own OpenRouter API key.
+Add a chat to any page, with your own OpenRouter key.
 
 == Description ==
 
-ARWP Agents lets you create AI chat agents, add them to any page, and review conversations from one place. Each agent can be configured with its own system prompt, model, and generation parameters.
+ARWP Agents lets you keep AI chat on your own site. You hold the key, decide how each agent should sound, and place the chat where you want it.
 
-You connect one OpenRouter API key, create as many agents as you need, and place each chat with a shortcode: `[arwp id="123"]`.
+Use the shortcode `[arwp id="123"]`.
 
-Features:
+* One OpenRouter key for every agent.
+* A prompt, model, temperature, and reply length for each one.
+* Light or dark.
+* A short pause between messages, and hourly limits, so a public page cannot run through your credits.
+* A conversation log in wp-admin.
 
-* Streaming chat powered by OpenRouter models.
-* Per-agent system prompt, model, temperature, token limit, and light or dark appearance.
-* Per-agent cooldown and hourly message caps, with safe defaults.
-* Conversation history and an admin conversation log.
-* Shortcode placement on any page or post. Only administrators can create or edit agents.
+Only administrators can create or edit agents.
+
+A message is sent to OpenRouter with the agent's prompt and the recent turns of that chat, so the model can reply. OpenRouter's terms are at https://openrouter.ai/terms and its privacy policy is at https://openrouter.ai/privacy.
 
 == Installation ==
 
-1. Upload the plugin files to `/wp-content/plugins/arwp-agents`, or install the plugin through the WordPress plugins screen directly.
-2. Activate the plugin through the "Plugins" screen in WordPress.
-3. Go to ARWP Agents → Settings and add your OpenRouter API key.
-4. Create an agent under ARWP Agents → Add Agent and place it on a page with the shortcode.
+1. Install and activate ARWP Agents.
+2. Open ARWP Agents → Settings and save your OpenRouter key.
+3. Create an agent, then add `[arwp id="123"]` to a page.
 
 == Frequently Asked Questions ==
 
-= Does this plugin require an external API key? =
+= Do I need an API key? =
 
-Yes. Chat responses are generated through the OpenRouter API, which requires your own API key configured under ARWP Agents → Settings.
+Yes. Replies come from OpenRouter, using the key you save under ARWP Agents → Settings.
 
-= Where do visitor messages go? =
+= Where do messages go? =
 
-Each chat message is sent to OpenRouter (https://openrouter.ai/) so the selected model can generate a reply. The request includes the message, the agent system prompt, and recent chat history. OpenRouter's terms of service are at https://openrouter.ai/terms and its privacy policy is at https://openrouter.ai/privacy. Do not place a published shortcode on a public page unless you are comfortable with that data leaving your WordPress site.
+To OpenRouter, with the agent's prompt and recent messages from that conversation. Nothing is sent until someone uses a published shortcode.
 
-= Can visitors use my OpenRouter credits? =
+= Can visitors spend my credits? =
 
-Yes. Anyone who can load a published agent shortcode can start a chat billed to your OpenRouter account. Each agent defaults to a 5 second cooldown, 30 messages per visitor per hour, and 200 messages per hour for that agent. Change those under the agent settings. Set a value to 0 to turn that cap off. Only publish agents you intend to expose.
+Yes, if they can open a page with the shortcode. A new agent waits 5 seconds between messages, allows 30 messages per visitor each hour, and 200 messages an hour in total. Set a limit to 0 to turn it off.
+
+== Screenshots ==
+
+1. Save your OpenRouter key and choose a default model.
+2. Give an agent its prompt, model, and limits.
+3. The chat, in dark mode.
+4. The same chat placed on a page.
 
 == Changelog ==
 
 = 1.5.0 =
 * Renamed the plugin to ARWP Agents.
-* Lengthened internal prefixes on PHP, options, hooks, custom tables, and the chat script.
-* The chat shortcode is now [arwp id="123"].
+* The shortcode is now `[arwp id="123"]`.
 * Updated marked to 18.1.3 and Select2 to 4.1.0.
 
 = 1.4.0 =
-* Initial public release: OpenRouter connection, per-agent chat, shortcode placement, and conversation log.
-* Administrators are the only role that can create or edit agents.
-* Per-agent cooldown and hourly message caps, with safe defaults.
-* Visitors see a generic message when the upstream API fails. Administrators still see the detail.
+* First public release: OpenRouter, per-agent chat, shortcode placement, and a conversation log.
+* Only administrators can create or edit agents.
+* Cooldown and hourly limits, on by default.
+* Visitors see a general message when a reply fails. Administrators still see the detail.
 
 = 1.1.1 =
-* Hardened database queries with identifier-safe `$wpdb->prepare()` placeholders.
-* Sanitized and unslashed remaining request inputs across admin and AJAX handlers.
-* Vendored the Select2 admin asset locally instead of loading it from a third-party CDN.
-* Escaped inline nonce output and added missing translator comments.
+* Safer database queries, cleaned request handling, and a local copy of Select2.
