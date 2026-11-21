@@ -4,7 +4,7 @@ Tags: ai, chatbot, chat, openrouter, agents
 Requires at least: 6.2
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.6.1
+Stable tag: 1.7.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -99,7 +99,7 @@ Yes. The plugin does not include a key. Create one at https://openrouter.ai/ and
 
 = Where do I put the chat? =
 
-In the content of any page or post, using that agent's shortcode. Each agent has its own.
+In the content of any page or post, using that agent's shortcode, or with the ARWP Chat block. Each agent has its own.
 
 = Can each agent use a different model? =
 
@@ -111,7 +111,7 @@ Each agent chooses anyone who can view the page, logged-in visitors, or specific
 
 = Can visitors spend my OpenRouter credit? =
 
-Yes, when the shortcode is on a public page and the agent allows that visitor. A new agent waits 5 seconds between messages, allows 30 messages per visitor each hour, and 200 messages an hour for that agent. You can also cap messages per logged-in account and per role. Set a number to 0 to turn that cap off. Existing agents start with the account and role caps off.
+Yes, when the shortcode or block is on a public page and the agent allows that visitor. A new agent waits 5 seconds between messages, allows 30 messages per visitor each hour, and 200 messages an hour for that agent. You can also cap messages per logged-in account and per role. Settings can stop the whole site for the day after a token ceiling or a reported dollar ceiling. Set a number to 0 to turn that cap off. Existing agents start with the account and role caps off. The daily ceilings start off.
 
 = Where is the API key stored? =
 
@@ -119,7 +119,7 @@ In Settings, where it is encrypted in the database, or in wp-config.php as defin
 
 = Where are the conversations stored? =
 
-On your site. The visitor's browser keeps a token so the chat can continue. Administrators can read and delete conversations under ARWP Agents → Chats. Names and contact details stay hidden until an administrator turns on Show names and contact details in Chats. Deleting the plugin also deletes the agents, the chats, and the saved API key.
+On your site. The visitor's browser keeps a token so the chat can continue. Visitors can download or delete their own chat. Administrators can read, download, and delete conversations under ARWP Agents → Chats. Settings can delete chats older than a chosen number of days. Names and contact details stay hidden until an administrator turns on Show names and contact details in Chats. Before the first send, the visitor must accept a notice that the message leaves the site for OpenRouter. Deleting the plugin also deletes the agents, the chats, and the saved API key.
 
 = What if the key is missing or OpenRouter does not answer? =
 
@@ -133,6 +133,12 @@ The chat box still appears. The reply does not. Visitors see a general message. 
 4. The same chat placed on a page with the shortcode.
 
 == Changelog ==
+
+= 1.7.0 =
+* Settings can stop new messages after a daily token ceiling or a reported dollar ceiling, and email once near 80% and once when messages stop.
+* Chats can be kept for a set number of days. Visitors can download or delete their own chat, and administrators can download a CSV or a transcript.
+* The ARWP Chat block places the same chat as the shortcode.
+* Visitors must accept a notice that the message is sent to OpenRouter before the first send in a browser session.
 
 = 1.6.1 =
 * Blocked patterns keep escapes such as \d when an agent is saved or cloned.

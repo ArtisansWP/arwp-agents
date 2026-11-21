@@ -209,6 +209,103 @@ JS;
 			'arwp-settings',
 			'arwp_chats_section'
 		);
+
+		register_setting(
+			'arwp_settings_group',
+			'arwp_retention_days',
+			array(
+				'type'              => 'integer',
+				'sanitize_callback' => array( $this, 'sanitize_non_negative_int' ),
+				'default'           => 0,
+			)
+		);
+
+		register_setting(
+			'arwp_settings_group',
+			'arwp_required_notice',
+			array(
+				'type'              => 'string',
+				'sanitize_callback' => array( $this, 'sanitize_required_notice' ),
+				'default'           => '',
+			)
+		);
+
+		register_setting(
+			'arwp_settings_group',
+			'arwp_daily_token_cap',
+			array(
+				'type'              => 'integer',
+				'sanitize_callback' => array( $this, 'sanitize_non_negative_int' ),
+				'default'           => 0,
+			)
+		);
+
+		register_setting(
+			'arwp_settings_group',
+			'arwp_daily_dollar_cap',
+			array(
+				'type'              => 'string',
+				'sanitize_callback' => array( $this, 'sanitize_dollar_cap' ),
+				'default'           => '0.00',
+			)
+		);
+
+		register_setting(
+			'arwp_settings_group',
+			'arwp_usage_alert_email',
+			array(
+				'type'              => 'string',
+				'sanitize_callback' => array( $this, 'sanitize_alert_email' ),
+				'default'           => '',
+			)
+		);
+
+		add_settings_field(
+			'arwp_retention_days',
+			__( 'Retention', 'arwp-agents' ),
+			array( $this, 'render_retention_field' ),
+			'arwp-settings',
+			'arwp_chats_section'
+		);
+
+		add_settings_field(
+			'arwp_required_notice',
+			__( 'Required notice', 'arwp-agents' ),
+			array( $this, 'render_required_notice_field' ),
+			'arwp-settings',
+			'arwp_chats_section'
+		);
+
+		add_settings_section(
+			'arwp_usage_section',
+			__( 'Daily usage', 'arwp-agents' ),
+			array( $this, 'render_usage_section_info' ),
+			'arwp-settings'
+		);
+
+		add_settings_field(
+			'arwp_daily_token_cap',
+			__( 'Daily token ceiling', 'arwp-agents' ),
+			array( $this, 'render_token_cap_field' ),
+			'arwp-settings',
+			'arwp_usage_section'
+		);
+
+		add_settings_field(
+			'arwp_daily_dollar_cap',
+			__( 'Daily dollar ceiling', 'arwp-agents' ),
+			array( $this, 'render_dollar_cap_field' ),
+			'arwp-settings',
+			'arwp_usage_section'
+		);
+
+		add_settings_field(
+			'arwp_usage_alert_email',
+			__( 'Alert email', 'arwp-agents' ),
+			array( $this, 'render_alert_email_field' ),
+			'arwp-settings',
+			'arwp_usage_section'
+		);
 	}
 
 	/**
@@ -251,6 +348,53 @@ JS;
 	 */
 	public function sanitize_chats_show_details( $value ) {
 		return ( '1' === (string) $value ) ? '1' : '0';
+	}
+
+	/**
+	 * Store a non-negative integer.
+	 *
+	 * @param mixed $value Submitted value.
+	 * @return int
+	 */
+	public function sanitize_non_negative_int( $value ) {
+		return max( 0, (int) $value );
+	}
+
+	/**
+	 * Store a dollar ceiling with two decimal places. Negative values become zero.
+	 *
+	 * @param mixed $value Submitted value.
+	 * @return string
+	 */
+	public function sanitize_dollar_cap( $value ) {
+		$number = is_numeric( $value ) ? (float) $value : 0;
+		if ( $number < 0 ) {
+			$number = 0;
+		}
+
+		return number_format( $number, 2, '.', '' );
+	}
+
+	/**
+	 * Store an alert address, or blank so the site admin address is used.
+	 *
+	 * @param mixed $value Submitted value.
+	 * @return string
+	 */
+	public function sanitize_alert_email( $value ) {
+		$email = sanitize_email( (string) $value );
+
+		return is_email( $email ) ? $email : '';
+	}
+
+	/**
+	 * Store the required notice. A blank value is kept blank so the default sentence is shown.
+	 *
+	 * @param mixed $value Submitted value.
+	 * @return string
+	 */
+	public function sanitize_required_notice( $value ) {
+		return sanitize_textarea_field( (string) $value );
 	}
 
 	/**
@@ -545,6 +689,70 @@ JS;
 			<?php esc_html_e( 'Show names and contact details in Chats', 'arwp-agents' ); ?>
 		</label>
 		<p class="description"><?php esc_html_e( 'When unchecked, Chats hides account names and replaces emails, phone numbers, and IP addresses in titles and messages.', 'arwp-agents' ); ?></p>
+		<?php
+	}
+
+	/**
+	 * Days to keep transcripts. Zero keeps them.
+	 */
+	public function render_retention_field() {
+		$value = (int) get_option( 'arwp_retention_days', 0 );
+		?>
+		<input type="number" min="0" step="1" name="arwp_retention_days" id="arwp_retention_days" value="<?php echo esc_attr( $value ); ?>" class="small-text" />
+		<p class="description"><?php esc_html_e( 'Delete chats older than this many days. 0 keeps them until someone deletes them.', 'arwp-agents' ); ?></p>
+		<?php
+	}
+
+	/**
+	 * Site-wide notice shown before the first send. Blank uses the default sentence.
+	 */
+	public function render_required_notice_field() {
+		$value = (string) get_option( 'arwp_required_notice', '' );
+		?>
+		<textarea name="arwp_required_notice" id="arwp_required_notice" rows="3" class="large-text"><?php echo esc_textarea( $value ); ?></textarea>
+		<p class="description">
+			<?php esc_html_e( 'Shown with a required checkbox before a visitor can send. Leave this blank to use the default sentence. It cannot be turned off.', 'arwp-agents' ); ?>
+		</p>
+		<?php
+	}
+
+	/**
+	 * Usage section introduction.
+	 */
+	public function render_usage_section_info() {
+		echo '<p>' . esc_html__( 'Stop new messages for the whole site when a daily ceiling is reached. 0 turns that ceiling off. The token ceiling always counts. The dollar ceiling counts only the cost OpenRouter reports.', 'arwp-agents' ) . '</p>';
+	}
+
+	/**
+	 * Daily token ceiling field.
+	 */
+	public function render_token_cap_field() {
+		$value = (int) get_option( 'arwp_daily_token_cap', 0 );
+		?>
+		<input type="number" min="0" step="1" name="arwp_daily_token_cap" id="arwp_daily_token_cap" value="<?php echo esc_attr( $value ); ?>" class="small-text" />
+		<p class="description"><?php esc_html_e( 'Maximum tokens for one calendar day. 0 means no token ceiling.', 'arwp-agents' ); ?></p>
+		<?php
+	}
+
+	/**
+	 * Daily dollar ceiling field.
+	 */
+	public function render_dollar_cap_field() {
+		$value = get_option( 'arwp_daily_dollar_cap', '0.00' );
+		?>
+		<input type="number" min="0" step="0.01" name="arwp_daily_dollar_cap" id="arwp_daily_dollar_cap" value="<?php echo esc_attr( $value ); ?>" class="small-text" />
+		<p class="description"><?php esc_html_e( 'Maximum reported dollars for one calendar day. 0 means no dollar ceiling.', 'arwp-agents' ); ?></p>
+		<?php
+	}
+
+	/**
+	 * Alert address field.
+	 */
+	public function render_alert_email_field() {
+		$value = (string) get_option( 'arwp_usage_alert_email', '' );
+		?>
+		<input type="email" name="arwp_usage_alert_email" id="arwp_usage_alert_email" value="<?php echo esc_attr( $value ); ?>" class="regular-text" />
+		<p class="description"><?php esc_html_e( 'Emailed once near 80% of a ceiling, and once when new messages are stopped. Leave blank to use the site admin email.', 'arwp-agents' ); ?></p>
 		<?php
 	}
 

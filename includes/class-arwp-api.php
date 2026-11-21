@@ -50,6 +50,26 @@ class ARWP_API {
 			)
 		);
 
+		register_rest_route(
+			'arwp/v1',
+			'/session/delete',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'handle_session_delete' ),
+				'permission_callback' => $nonce_perm,
+			)
+		);
+
+		register_rest_route(
+			'arwp/v1',
+			'/session/export',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'handle_session_export' ),
+				'permission_callback' => $nonce_perm,
+			)
+		);
+
 		// Public on purpose: a full-page cache can serve a stale nonce, and the
 		// browser needs a way to pick up a fresh one without a reload.
 		register_rest_route(
@@ -264,6 +284,12 @@ class ARWP_API {
 					);
 				}
 			}
+		}
+
+		// Before the hourly counters, so a day that is already stopped does not consume that quota.
+		$spend = ARWP_Usage::preflight_error();
+		if ( is_wp_error( $spend ) ) {
+			return $spend;
 		}
 
 		// After cooldown, so a too-soon retry does not consume the hourly quota.
@@ -665,6 +691,7 @@ class ARWP_API {
 		$ai_response_content = isset( $completion_data['choices'][0]['message']['content'] ) ? $completion_data['choices'][0]['message']['content'] : '';
 
 		$tokens_used = isset( $completion_data['usage']['total_tokens'] ) ? intval( $completion_data['usage']['total_tokens'] ) : 0;
+		$cost_used   = ( isset( $completion_data['usage']['cost'] ) && is_numeric( $completion_data['usage']['cost'] ) ) ? $completion_data['usage']['cost'] : 0;
 
 		if ( empty( $ai_response_content ) ) {
 			return new WP_Error(
@@ -677,6 +704,7 @@ class ARWP_API {
 		return array(
 			'content' => $ai_response_content,
 			'tokens'  => $tokens_used,
+			'cost'    => $cost_used,
 		);
 	}
 
@@ -730,7 +758,7 @@ class ARWP_API {
 				);
 				return;
 			}
-			$this->save_assistant_message( $ctx['session_id'], $result['content'], $result['tokens'] );
+			$this->save_assistant_message( $ctx['session_id'], $result['content'], $result['tokens'], isset( $result['cost'] ) ? $result['cost'] : 0 );
 			$send(
 				array(
 					'type'    => 'delta',
@@ -746,6 +774,7 @@ class ARWP_API {
 
 		$full_text = '';
 		$tokens    = 0;
+		$cost      = 0;
 		$buffer    = '';
 		$http_code = 0;
 
@@ -781,7 +810,7 @@ class ARWP_API {
 
 					return 0;
 				},
-				CURLOPT_WRITEFUNCTION    => function ( $ch, $data ) use ( &$full_text, &$tokens, &$buffer, $send ) {
+				CURLOPT_WRITEFUNCTION    => function ( $ch, $data ) use ( &$full_text, &$tokens, &$cost, &$buffer, $send ) {
 					$buffer .= $data;
 					$lines   = explode( "\n", $buffer );
 					$buffer  = array_pop( $lines );
@@ -832,6 +861,10 @@ class ARWP_API {
 						if ( isset( $json['usage']['total_tokens'] ) ) {
 							$tokens = intval( $json['usage']['total_tokens'] );
 						}
+
+						if ( isset( $json['usage']['cost'] ) && is_numeric( $json['usage']['cost'] ) ) {
+							$cost = $json['usage']['cost'];
+						}
 					}
 
 					return strlen( $data );
@@ -852,7 +885,7 @@ class ARWP_API {
 			if ( '' === trim( $ai_response ) ) {
 				$result = $this->dispatch_openrouter( $ctx['payload'] );
 				if ( ! is_wp_error( $result ) ) {
-					$this->save_assistant_message( $ctx['session_id'], $result['content'], $result['tokens'] );
+					$this->save_assistant_message( $ctx['session_id'], $result['content'], $result['tokens'], isset( $result['cost'] ) ? $result['cost'] : 0 );
 					$send(
 						array(
 							'type'    => 'delta',
@@ -872,7 +905,7 @@ class ARWP_API {
 			}
 		}
 
-		$this->save_assistant_message( $ctx['session_id'], $ai_response, $tokens );
+		$this->save_assistant_message( $ctx['session_id'], $ai_response, $tokens, $cost );
 		$send( $this->stream_done_payload( $ctx, $ai_response ) );
 	}
 
@@ -882,9 +915,10 @@ class ARWP_API {
 	 * @param int    $session_id Session ID.
 	 * @param string $content    Message body.
 	 * @param int    $tokens     Token count.
+	 * @param mixed  $cost       Dollar cost reported for the reply.
 	 * @return int Inserted message ID.
 	 */
-	private function save_assistant_message( $session_id, $content, $tokens ) {
+	private function save_assistant_message( $session_id, $content, $tokens, $cost = 0 ) {
 		global $wpdb;
 
 		$wpdb->query(
@@ -898,6 +932,8 @@ class ARWP_API {
 				current_time( 'mysql' )
 			)
 		);
+
+		ARWP_Usage::record( $tokens, $cost );
 
 		return intval( $wpdb->insert_id );
 	}
@@ -986,30 +1022,9 @@ class ARWP_API {
 	public function handle_history_request( $request ) {
 		global $wpdb;
 
-		$agent_id      = intval( $request->get_param( 'agent_id' ) );
-		$session_token = sanitize_text_field( $request->get_param( 'session_token' ) );
-
-		if ( ! $agent_id || empty( $session_token ) ) {
-			return new WP_Error( 'arwp_invalid_params', __( 'Agent ID and Session Token are required.', 'arwp-agents' ), array( 'status' => 400 ) );
-		}
-
-		$agent_post = get_post( $agent_id );
-		if ( ! $agent_post || 'arwp_agent' !== $agent_post->post_type ) {
-			return new WP_Error( 'arwp_agent_not_found', __( 'Agent not found.', 'arwp-agents' ), array( 'status' => 404 ) );
-		}
-
-		if ( 'publish' !== $agent_post->post_status && ! current_user_can( 'edit_post', $agent_id ) ) {
-			return new WP_Error( 'arwp_agent_not_found', __( 'Agent not found.', 'arwp-agents' ), array( 'status' => 404 ) );
-		}
-
-		$access_error = $this->access_denied_error( $agent_id );
-		if ( is_wp_error( $access_error ) ) {
-			return $access_error;
-		}
-
-		$session = $this->get_owned_session( $agent_id, $session_token );
-		if ( ! $session ) {
-			return new WP_Error( 'arwp_session_not_found', __( 'Session not found.', 'arwp-agents' ), array( 'status' => 404 ) );
+		$session = $this->session_from_request( $request );
+		if ( is_wp_error( $session ) ) {
+			return $session;
 		}
 
 		$table_messages = $wpdb->prefix . 'arwp_messages';
@@ -1036,5 +1051,94 @@ class ARWP_API {
 			),
 			200
 		);
+	}
+
+	/**
+	 * Delete the visitor's own session.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function handle_session_delete( $request ) {
+		$session = $this->session_from_request( $request );
+		if ( is_wp_error( $session ) ) {
+			return $session;
+		}
+
+		ARWP_Privacy::delete_session( $session->id );
+
+		return new WP_REST_Response(
+			array( 'success' => true ),
+			200
+		);
+	}
+
+	/**
+	 * Download the visitor's own transcript.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_Error|void
+	 */
+	public function handle_session_export( $request ) {
+		global $wpdb;
+
+		$session = $this->session_from_request( $request );
+		if ( is_wp_error( $session ) ) {
+			return $session;
+		}
+
+		$messages = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT role, content FROM %i WHERE session_id = %d AND role != 'system' ORDER BY id ASC",
+				$wpdb->prefix . 'arwp_messages',
+				$session->id
+			),
+			ARRAY_A
+		);
+
+		$title = $session->title ? $session->title : __( 'Chat', 'arwp-agents' );
+		$text  = ARWP_Privacy::format_transcript( $title, $messages );
+
+		nocache_headers();
+		header( 'Content-Type: text/plain; charset=utf-8' );
+		header( 'Content-Disposition: attachment; filename="arwp-chat.txt"' );
+		echo $text; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- The visitor's own transcript, sent as a file download.
+		exit;
+	}
+
+	/**
+	 * Load a session the caller is allowed to read, delete, or export.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return object|WP_Error
+	 */
+	private function session_from_request( $request ) {
+		$agent_id      = intval( $request->get_param( 'agent_id' ) );
+		$session_token = sanitize_text_field( (string) $request->get_param( 'session_token' ) );
+
+		if ( ! $agent_id || '' === $session_token ) {
+			return new WP_Error( 'arwp_invalid_params', __( 'Agent ID and Session Token are required.', 'arwp-agents' ), array( 'status' => 400 ) );
+		}
+
+		$agent_post = get_post( $agent_id );
+		if ( ! $agent_post || 'arwp_agent' !== $agent_post->post_type ) {
+			return new WP_Error( 'arwp_agent_not_found', __( 'Agent not found.', 'arwp-agents' ), array( 'status' => 404 ) );
+		}
+
+		if ( 'publish' !== $agent_post->post_status && ! current_user_can( 'edit_post', $agent_id ) ) {
+			return new WP_Error( 'arwp_agent_not_found', __( 'Agent not found.', 'arwp-agents' ), array( 'status' => 404 ) );
+		}
+
+		$access_error = $this->access_denied_error( $agent_id );
+		if ( is_wp_error( $access_error ) ) {
+			return $access_error;
+		}
+
+		$session = $this->get_owned_session( $agent_id, $session_token );
+		if ( ! $session ) {
+			return new WP_Error( 'arwp_session_not_found', __( 'Session not found.', 'arwp-agents' ), array( 'status' => 404 ) );
+		}
+
+		return $session;
 	}
 }

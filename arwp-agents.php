@@ -3,7 +3,7 @@
  * Plugin Name:       ARWP Agents
  * Plugin URI:        https://wordpress.org/plugins/arwp-agents/
  * Description:       Self-hosted AI chat agents for WordPress, using your own OpenRouter API key.
- * Version:           1.6.1
+ * Version:           1.7.0
  * Requires at least: 6.2
  * Requires PHP:      7.4
  * Author:            ARWP
@@ -22,12 +22,14 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // Define plugin constants.
-define( 'ARWP_VERSION', '1.6.1' );
+define( 'ARWP_VERSION', '1.7.0' );
 define( 'ARWP_PATH', plugin_dir_path( __FILE__ ) );
 define( 'ARWP_URL', plugin_dir_url( __FILE__ ) );
 define( 'ARWP_BASENAME', plugin_basename( __FILE__ ) );
 
 // Include required classes.
+require_once ARWP_PATH . 'includes/class-arwp-usage.php';
+require_once ARWP_PATH . 'includes/class-arwp-privacy.php';
 require_once ARWP_PATH . 'includes/class-arwp-activator.php';
 require_once ARWP_PATH . 'includes/class-arwp-settings.php';
 require_once ARWP_PATH . 'includes/class-arwp-cpt.php';
@@ -395,11 +397,13 @@ add_filter( 'wp_plugin_check_ignore_files', 'arwp_plugin_check_ignore_files' );
  * Translations ship through the Domain Path header. WordPress loads them.
  */
 function arwp_init_plugin() {
-	if ( get_option( 'arwp_db_version' ) !== '1.6' ) {
+	if ( get_option( 'arwp_db_version' ) !== '1.7' ) {
 		ARWP_Activator::activate();
 		ARWP_Activator::cleanup_removed_features();
-		update_option( 'arwp_db_version', '1.6' );
+		update_option( 'arwp_db_version', '1.7' );
 	}
+
+	ARWP_Privacy::init();
 
 	$cpt = new ARWP_CPT();
 	$cpt->init();

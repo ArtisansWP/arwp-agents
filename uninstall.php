@@ -13,9 +13,12 @@ call_user_func(
 	static function () {
 		global $wpdb;
 
+		wp_clear_scheduled_hook( 'arwp_daily_maintenance' );
+
 		$tables = array(
 			$wpdb->prefix . 'arwp_sessions',
 			$wpdb->prefix . 'arwp_messages',
+			$wpdb->prefix . 'arwp_usage_daily',
 			$wpdb->prefix . 'arwp_documents',
 			$wpdb->prefix . 'arwp_embeddings',
 			$wpdb->prefix . 'arwp_promos',
@@ -30,6 +33,11 @@ call_user_func(
 			'arwp_openrouter_api_key',
 			'arwp_openrouter_default_model',
 			'arwp_chats_show_details',
+			'arwp_daily_token_cap',
+			'arwp_daily_dollar_cap',
+			'arwp_usage_alert_email',
+			'arwp_retention_days',
+			'arwp_required_notice',
 			'arwp_openai_api_key',
 			'arwp_rag_chunk_size',
 			'arwp_api_status',

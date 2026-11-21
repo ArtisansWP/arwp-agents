@@ -635,6 +635,44 @@
 	cursor: pointer;
 }
 
+.arwp-privacy-notice {
+	margin: 0 8px 8px;
+	padding: 10px 12px;
+	border: 1px solid var(--arwp-border);
+	border-radius: 10px;
+	background: var(--arwp-surface);
+	font-size: 13px;
+	color: var(--arwp-text);
+}
+
+.arwp-privacy-notice-text {
+	margin: 0 0 8px;
+}
+
+.arwp-privacy-accept-label {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-weight: 600;
+}
+
+.arwp-chat-tools {
+	display: flex;
+	gap: 12px;
+	margin: 8px 8px 0;
+}
+
+.arwp-chat-tools button {
+	background: none;
+	border: 0;
+	padding: 0;
+	color: var(--arwp-muted);
+	font: inherit;
+	font-size: 12px;
+	cursor: pointer;
+	text-decoration: underline;
+}
+
 .arwp-chat-disclaimer {
 	margin: 8px 8px 0;
 	font-size: 12px;

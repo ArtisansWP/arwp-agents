@@ -28,6 +28,10 @@
 			}
 			const tokenKey = `arwp_session_token_${agentId}`;
 			let sessionToken = localStorage.getItem(tokenKey) || '';
+			const noticeKey = `arwp_notice_ok_${agentId}`;
+			const noticeBox = container.querySelector('.arwp-privacy-notice');
+			const noticeInput = container.querySelector('.arwp-privacy-accept');
+			let noticeAccepted = !noticeBox || sessionStorage.getItem(noticeKey) === '1';
 
 			let isCooldownActive = false;
 
@@ -114,12 +118,38 @@
 					submitBtn.disabled = false;
 					return;
 				}
-				if (isCooldownActive) {
+				if (!noticeAccepted || isCooldownActive) {
 					submitBtn.disabled = true;
 					return;
 				}
 				submitBtn.disabled = textarea.value.trim() === '';
 			};
+
+			const applyNoticeGate = () => {
+				if (!noticeBox) {
+					return;
+				}
+				noticeBox.hidden = noticeAccepted;
+				textarea.disabled = !noticeAccepted;
+				if (noticeInput) {
+					noticeInput.checked = noticeAccepted;
+				}
+				updateSendEnabled();
+			};
+
+			applyNoticeGate();
+
+			if (noticeInput) {
+				noticeInput.addEventListener('change', () => {
+					noticeAccepted = noticeInput.checked;
+					if (noticeAccepted) {
+						sessionStorage.setItem(noticeKey, '1');
+					} else {
+						sessionStorage.removeItem(noticeKey);
+					}
+					applyNoticeGate();
+				});
+			}
 
 
 			// Escape HTML tags.
@@ -312,7 +342,7 @@
 					button.className = 'arwp-suggestion';
 					button.textContent = text;
 					button.addEventListener('click', () => {
-						if (activeController || isCooldownActive) {
+						if (activeController || isCooldownActive || !noticeAccepted) {
 							return;
 						}
 						textarea.value = text;
@@ -614,8 +644,94 @@
 				updateSendEnabled();
 			};
 
+			const showChatError = (message) => {
+				errorContainer.textContent = message;
+				errorContainer.classList.add('active');
+			};
+
+			const postSessionAction = async(path) => {
+				const response = await fetch(`${arwp_globals.api_url}${path}`, {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+						'X-WP-Nonce': arwp_globals.nonce
+					},
+					body: JSON.stringify({
+						agent_id: agentId,
+						session_token: sessionToken,
+						nonce: arwp_globals.chat_nonce
+					})
+				});
+
+				if (response.status === 403 && await refreshNonce()) {
+					return fetch(`${arwp_globals.api_url}${path}`, {
+						method: 'POST',
+						headers: {
+							'Content-Type': 'application/json',
+							'X-WP-Nonce': arwp_globals.nonce
+						},
+						body: JSON.stringify({
+							agent_id: agentId,
+							session_token: sessionToken,
+							nonce: arwp_globals.chat_nonce
+						})
+					});
+				}
+
+				return response;
+			};
+
+			const downloadBtn = container.querySelector('.arwp-download-chat');
+			const deleteBtn = container.querySelector('.arwp-delete-chat');
+
+			if (downloadBtn) {
+				downloadBtn.addEventListener('click', async() => {
+					if (!sessionToken) {
+						showChatError(t('no_chat', 'There is no chat to download yet.'));
+						return;
+					}
+					const response = await postSessionAction('session/export');
+					if (!response.ok) {
+						showChatError(t('chat_action_failed', 'That chat action failed. Please try again.'));
+						return;
+					}
+					const blob = await response.blob();
+					const url = URL.createObjectURL(blob);
+					const link = document.createElement('a');
+					link.href = url;
+					link.download = 'arwp-chat.txt';
+					link.click();
+					URL.revokeObjectURL(url);
+				});
+			}
+
+			if (deleteBtn) {
+				deleteBtn.addEventListener('click', async() => {
+					if (!sessionToken) {
+						showChatError(t('no_chat_delete', 'There is no chat to delete yet.'));
+						return;
+					}
+					if (!window.confirm(t('delete_confirm', 'Delete this chat from this site?'))) {
+						return;
+					}
+					const response = await postSessionAction('session/delete');
+					if (!response.ok) {
+						showChatError(t('chat_action_failed', 'That chat action failed. Please try again.'));
+						return;
+					}
+					localStorage.removeItem(tokenKey);
+					sessionToken = '';
+					messagesContainer.textContent = '';
+					showEmptyState();
+				});
+			}
+
 			form.addEventListener('submit', async(e) => {
 				e.preventDefault();
+
+				if (!noticeAccepted) {
+					return;
+				}
 
 				const suggestionRow = container.querySelector('.arwp-suggestions');
 				if (suggestionRow) {

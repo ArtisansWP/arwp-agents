@@ -22,6 +22,8 @@ class ARWP_Conversations {
 	public function init() {
 		add_action( 'admin_menu', array( $this, 'add_menu' ) );
 		add_action( 'admin_post_arwp_delete_session', array( $this, 'handle_delete_session' ) );
+		add_action( 'admin_post_arwp_export_sessions', array( $this, 'export_sessions' ) );
+		add_action( 'admin_post_arwp_export_transcript', array( $this, 'export_transcript' ) );
 	}
 
 	/**
@@ -63,6 +65,115 @@ class ARWP_Conversations {
 		}
 
 		wp_safe_redirect( $redirect );
+		exit;
+	}
+
+	/**
+	 * CSV of the filtered session list.
+	 */
+	public function export_sessions() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You do not have permission to export conversations.', 'arwp-agents' ) );
+		}
+
+		check_admin_referer( 'arwp_export_sessions' );
+
+		global $wpdb;
+
+		$agent_filter = isset( $_GET['agent_id'] ) ? intval( $_GET['agent_id'] ) : 0;
+		$where        = '1=1';
+		$params       = array( $wpdb->prefix . 'arwp_messages', $wpdb->prefix . 'arwp_sessions' );
+
+		if ( $agent_filter ) {
+			$where   .= ' AND s.agent_id = %d';
+			$params[] = $agent_filter;
+		}
+
+		$sql = "SELECT s.id, s.agent_id, s.title, s.user_id, s.created_at,
+			(SELECT COUNT(*) FROM %i m WHERE m.session_id = s.id AND m.role != 'system') AS message_count
+			FROM %i s
+			WHERE $where
+			ORDER BY s.created_at DESC"; // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+
+		$sessions = $wpdb->get_results( $wpdb->prepare( $sql, $params ) ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter
+		if ( ! is_array( $sessions ) ) {
+			$sessions = array();
+		}
+
+		nocache_headers();
+		header( 'Content-Type: text/csv; charset=utf-8' );
+		header( 'Content-Disposition: attachment; filename="arwp-chats.csv"' );
+
+		$out = fopen( 'php://output', 'w' ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen -- CSV download stream.
+		fputcsv( $out, array( 'id', 'agent_id', 'title', 'user_id', 'created_at', 'message_count' ) );
+
+		foreach ( $sessions as $session ) {
+			fputcsv(
+				$out,
+				array(
+					$session->id,
+					$session->agent_id,
+					arwp_redact_personal_details( (string) $session->title ),
+					$session->user_id,
+					$session->created_at,
+					$session->message_count,
+				)
+			);
+		}
+
+		fclose( $out ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose
+		exit;
+	}
+
+	/**
+	 * Plain-text download of one session.
+	 */
+	public function export_transcript() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You do not have permission to export conversations.', 'arwp-agents' ) );
+		}
+
+		check_admin_referer( 'arwp_export_transcript' );
+
+		global $wpdb;
+
+		$session_id = isset( $_GET['session_id'] ) ? intval( $_GET['session_id'] ) : 0;
+		$session    = $wpdb->get_row(
+			$wpdb->prepare(
+				'SELECT * FROM %i WHERE id = %d',
+				$wpdb->prefix . 'arwp_sessions',
+				$session_id
+			)
+		);
+
+		if ( ! $session ) {
+			wp_die( esc_html__( 'That chat could not be found.', 'arwp-agents' ) );
+		}
+
+		$messages = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT role, content FROM %i WHERE session_id = %d AND role != 'system' ORDER BY id ASC",
+				$wpdb->prefix . 'arwp_messages',
+				$session->id
+			),
+			ARRAY_A
+		);
+
+		$rows = array();
+		foreach ( $messages as $message ) {
+			$rows[] = array(
+				'role'    => $message['role'],
+				'content' => arwp_redact_personal_details( $message['content'] ),
+			);
+		}
+
+		$title = arwp_redact_personal_details( $session->title ? $session->title : __( 'Chat', 'arwp-agents' ) );
+		$text  = ARWP_Privacy::format_transcript( $title, $rows );
+
+		nocache_headers();
+		header( 'Content-Type: text/plain; charset=utf-8' );
+		header( 'Content-Disposition: attachment; filename="arwp-chat.txt"' );
+		echo $text; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Transcript download. Redaction already ran.
 		exit;
 	}
 
@@ -158,7 +269,18 @@ class ARWP_Conversations {
 					esc_html( _n( '%d conversation', '%d conversations', $total, 'arwp-agents' ) ),
 					intval( $total )
 				);
+				$export_url = wp_nonce_url(
+					add_query_arg(
+						array(
+							'action'   => 'arwp_export_sessions',
+							'agent_id' => $agent_filter,
+						),
+						admin_url( 'admin-post.php' )
+					),
+					'arwp_export_sessions'
+				);
 				?>
+				| <a href="<?php echo esc_url( $export_url ); ?>"><?php esc_html_e( 'Download CSV', 'arwp-agents' ); ?></a>
 			</p>
 
 			<table class="wp-list-table widefat fixed striped">
@@ -288,6 +410,16 @@ class ARWP_Conversations {
 			),
 			'arwp_delete_session'
 		);
+		$export_url = wp_nonce_url(
+			add_query_arg(
+				array(
+					'action'     => 'arwp_export_transcript',
+					'session_id' => $session->id,
+				),
+				admin_url( 'admin-post.php' )
+			),
+			'arwp_export_transcript'
+		);
 		?>
 		<div class="wrap">
 			<h1><?php echo esc_html( arwp_redact_personal_details( $session->title ? $session->title : __( 'Untitled', 'arwp-agents' ) ) ); ?></h1>
@@ -295,6 +427,8 @@ class ARWP_Conversations {
 				<a href="<?php echo esc_url( $back_url ); ?>">&larr; <?php esc_html_e( 'All chats', 'arwp-agents' ); ?></a>
 				|
 				<a href="<?php echo esc_url( $delete_url ); ?>" onclick="return confirm('<?php echo esc_js( __( 'Delete this conversation and all of its messages?', 'arwp-agents' ) ); ?>');"><?php esc_html_e( 'Delete', 'arwp-agents' ); ?></a>
+				|
+				<a href="<?php echo esc_url( $export_url ); ?>"><?php esc_html_e( 'Download transcript', 'arwp-agents' ); ?></a>
 			</p>
 			<table class="widefat striped" style="max-width:960px;">
 				<tbody>

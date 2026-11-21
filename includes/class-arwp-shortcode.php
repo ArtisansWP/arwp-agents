@@ -21,6 +21,8 @@ class ARWP_Shortcode {
 	public function init() {
 		add_shortcode( 'arwp', array( $this, 'render_shortcode' ) );
 		add_action( 'wp_enqueue_scripts', array( $this, 'register_assets' ) );
+		add_action( 'init', array( $this, 'register_block' ) );
+		add_action( 'enqueue_block_editor_assets', array( $this, 'localize_block_agents' ) );
 	}
 
 	/**
@@ -48,6 +50,63 @@ class ARWP_Shortcode {
 			array( 'arwp-marked-js' ),
 			filemtime( ARWP_PATH . 'public/js/arwp-chat.js' ),
 			true
+		);
+	}
+
+	/**
+	 * Register the chat block. It renders the same markup as the shortcode.
+	 */
+	public function register_block() {
+		if ( ! function_exists( 'register_block_type' ) ) {
+			return;
+		}
+
+		register_block_type(
+			ARWP_PATH . 'blocks/chat',
+			array(
+				'render_callback' => array( $this, 'render_block' ),
+			)
+		);
+	}
+
+	/**
+	 * Render the block through the shortcode.
+	 *
+	 * @param array $attributes Block attributes.
+	 * @return string
+	 */
+	public function render_block( $attributes ) {
+		$agent_id = isset( $attributes['agentId'] ) ? (int) $attributes['agentId'] : 0;
+
+		return $this->render_shortcode( array( 'id' => $agent_id ) );
+	}
+
+	/**
+	 * Pass published agents to the block inspector.
+	 */
+	public function localize_block_agents() {
+		$posts  = get_posts(
+			array(
+				'post_type'      => 'arwp_agent',
+				'post_status'    => 'publish',
+				'posts_per_page' => -1,
+				'orderby'        => 'title',
+				'order'          => 'ASC',
+			)
+		);
+		$agents = array();
+
+		foreach ( $posts as $agent ) {
+			$agents[] = array(
+				'value' => (string) $agent->ID,
+				'label' => $agent->post_title,
+			);
+		}
+
+		wp_localize_script(
+			'arwp-chat-editor-script',
+			'arwpBlockData',
+			array( 'agents' => $agents )
 		);
 	}
 
@@ -103,16 +162,20 @@ class ARWP_Shortcode {
 					'nonce'      => wp_create_nonce( 'wp_rest' ),
 					'chat_nonce' => wp_create_nonce( 'arwp_chat_nonce' ),
 					'i18n'       => array(
-						'copy'            => __( 'Copy', 'arwp-agents' ),
-						'copied'          => __( 'Copied', 'arwp-agents' ),
-						'copy_failed'     => __( 'Copy failed', 'arwp-agents' ),
-						'send'            => __( 'Send message', 'arwp-agents' ),
-						'stop'            => __( 'Stop generating', 'arwp-agents' ),
-						'fullscreen'      => __( 'Enter fullscreen', 'arwp-agents' ),
-						'exit_fullscreen' => __( 'Exit fullscreen', 'arwp-agents' ),
-						'message'         => __( 'Message', 'arwp-agents' ),
+						'copy'               => __( 'Copy', 'arwp-agents' ),
+						'copied'             => __( 'Copied', 'arwp-agents' ),
+						'copy_failed'        => __( 'Copy failed', 'arwp-agents' ),
+						'send'               => __( 'Send message', 'arwp-agents' ),
+						'stop'               => __( 'Stop generating', 'arwp-agents' ),
+						'fullscreen'         => __( 'Enter fullscreen', 'arwp-agents' ),
+						'exit_fullscreen'    => __( 'Exit fullscreen', 'arwp-agents' ),
+						'message'            => __( 'Message', 'arwp-agents' ),
 						/* translators: %d: seconds remaining before the visitor can send again. */
-						'please_wait'     => __( 'Please wait %d seconds…', 'arwp-agents' ),
+						'please_wait'        => __( 'Please wait %d seconds…', 'arwp-agents' ),
+						'delete_confirm'     => __( 'Delete this chat from this site?', 'arwp-agents' ),
+						'no_chat'            => __( 'There is no chat to download yet.', 'arwp-agents' ),
+						'no_chat_delete'     => __( 'There is no chat to delete yet.', 'arwp-agents' ),
+						'chat_action_failed' => __( 'That chat action failed. Please try again.', 'arwp-agents' ),
 					),
 				)
 			);
@@ -159,6 +222,13 @@ class ARWP_Shortcode {
 			</div>
 
 			<div class="arwp-chat-footer">
+				<div class="arwp-privacy-notice">
+					<p class="arwp-privacy-notice-text"><?php echo esc_html( ARWP_Privacy::notice_text( get_option( 'arwp_required_notice', '' ) ) ); ?></p>
+					<label class="arwp-privacy-accept-label">
+						<input type="checkbox" class="arwp-privacy-accept" />
+						<?php esc_html_e( 'I understand', 'arwp-agents' ); ?>
+					</label>
+				</div>
 				<form class="arwp-chat-form" id="arwp-form-<?php echo esc_attr( $agent_id ); ?>">
 					<div class="arwp-chat-input-wrapper">
 						<label class="screen-reader-text" for="arwp-input-<?php echo esc_attr( $agent_id ); ?>"><?php echo esc_html( $ui['placeholder'] ); ?></label>
@@ -178,6 +248,10 @@ class ARWP_Shortcode {
 						</button>
 					</div>
 				</form>
+				<div class="arwp-chat-tools">
+					<button type="button" class="arwp-download-chat"><?php esc_html_e( 'Download this chat', 'arwp-agents' ); ?></button>
+					<button type="button" class="arwp-delete-chat"><?php esc_html_e( 'Delete this chat', 'arwp-agents' ); ?></button>
+				</div>
 				<div class="arwp-chat-error-message" id="arwp-error-<?php echo esc_attr( $agent_id ); ?>"></div>
 				<?php if ( '' !== $ui['disclaimer'] ) : ?>
 					<p class="arwp-chat-disclaimer"><?php echo esc_html( $ui['disclaimer'] ); ?></p>

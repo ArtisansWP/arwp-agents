@@ -30,6 +30,7 @@ class ARWP_Activator {
 		// Table names.
 		$table_sessions = $wpdb->prefix . 'arwp_sessions';
 		$table_messages = $wpdb->prefix . 'arwp_messages';
+		$table_usage    = $wpdb->prefix . 'arwp_usage_daily';
 
 		// SQL for arwp_sessions.
 		// Two spaces are required between PRIMARY KEY and (id) for dbDelta.
@@ -58,10 +59,20 @@ class ARWP_Activator {
 			KEY session_id (session_id)
 		) $charset_collate;";
 
+		$sql_usage = "CREATE TABLE $table_usage (
+			usage_date date NOT NULL,
+			tokens bigint(20) NOT NULL DEFAULT 0,
+			cost_micro bigint(20) NOT NULL DEFAULT 0,
+			alerted_near tinyint(1) NOT NULL DEFAULT 0,
+			alerted_stop tinyint(1) NOT NULL DEFAULT 0,
+			PRIMARY KEY  (usage_date)
+		) $charset_collate;";
+
 		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
 
 		dbDelta( $sql_sessions );
 		dbDelta( $sql_messages );
+		dbDelta( $sql_usage );
 
 		flush_rewrite_rules();
 	}
