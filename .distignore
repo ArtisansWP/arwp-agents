@@ -4,6 +4,7 @@
 .distignore
 .editorconfig
 README.md
+docs/
 .wordpress-org
 .phpunit.result.cache
 bin
